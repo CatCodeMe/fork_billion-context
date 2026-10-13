@@ -1,0 +1,171 @@
+<title>安全与多租户演进讲法</title>
+<main>
+<h1>安全与多租户：从代理/平台侧看 agent 系统</h1>
+<p class="sub">视角固定在 client ↔ proxy ↔ upstream 这条链上，不重复第 2 章的工具审批、沙箱、“tool result 是数据”（见第 2 章）。同前几章：从最朴素的本机透传出发，遇到问题加补丁，补丁带来新代价。<span class="tag">[代码]</span> 读过源码 <span class="tag">[推断]</span> 我的判断/未逐行验证 <span class="tag">[文档]</span> 公开行为 <span class="tag">[论文]</span> 作者自报</p>
+
+<div class="elev"><b>60 秒电梯版（开场就说这段）</b><br>
+“代理一旦存状态、握凭证、能自更新，就同时成了<b>数据平面、凭证平面、供应链</b>三个攻击面。我按演进讲：先划<b>信任边界</b>（管理面只认 loopback、隧道防 SSRF）；再管<b>凭证</b>（默认透传、日志脱敏、独立私有存储）；再做<b>会话隔离</b>（身份即租户边界，分裂要有流量证据）；诚实地说本项目的<b>落盘/多用户边界</b>其实只靠文件权限，不是真多租户；然后是<b>完整性</b>（tool 参数和签名 thinking 块字节不改）；<b>摘要会把注入持久化</b>；最后是<b>供应链与安装所有权</b>（单写者、完整性校验、回滚）。每一步我都会区分代码里有的和我会补的。”</div>
+
+<h2>三条贯穿全程的不变量</h2>
+<div class="inv">
+<div><p><b>① 边界默认收紧</b><br>管理面、隧道、插件协议头都只对明确可信的来源开放；放宽要有证据。</p></div>
+<div><p><b>② 不替用户改写载荷</b><br>会被执行、被校验签名、被持久化的字节原样转发，掩盖症状不等于修复。</p></div>
+<div><p><b>③ 一份副本只有一个写者</b><br>谁安装谁更新，不跨通道覆盖；自愈走所有者认可的通道。</p></div>
+</div>
+
+<h2>演进图（随步骤逐步长出来）</h2>
+<div class="nav" id="nav"></div>
+<figure><div class="scrollx">
+<svg viewBox="0 0 760 340" width="760" role="img" aria-label="安全与多租户：信任边界、凭证、会话隔离、落盘、完整性、注入、供应链随步骤逐步增加">
+<defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs>
+<g marker-end="url(#ar)">
+<path class="ln" data-s="0" d="M106 168 H376"/>
+<path class="ln" data-s="0" d="M472 168 H620"/>
+<path class="ln dash" data-s="3" d="M424 196 V222 H180 V250"/>
+<path class="ln dash" data-s="4" d="M424 196 V222 H302 V250"/>
+<path class="ln dash" data-s="6" d="M424 196 V250"/>
+<path class="ln dash" data-s="7" d="M424 196 V222 H546 V250"/>
+<path class="ln dash" data-s="8" d="M424 196 V222 H668 V250"/>
+</g>
+<text class="lbl" data-s="0" x="112" y="160">请求 + 凭证</text>
+<text class="lbl" data-s="0" x="500" y="160">转发</text>
+<text class="lbl" data-s="3" x="190" y="240">会话键</text>
+<text class="lbl" data-s="7" x="556" y="240">更新</text>
+<g class="bx" data-s="0"><rect x="10" y="140" width="96" height="56" rx="8"/><text class="t" x="20" y="162">Client</text><text x="20" y="182">agent 客户端</text></g>
+<g class="bx" data-s="1"><rect x="132" y="140" width="96" height="56" rx="8"/><text class="t" x="142" y="162">边界闸</text><text x="142" y="182">loopback·SSRF</text></g>
+<g class="bx" data-s="2"><rect x="254" y="140" width="96" height="56" rx="8"/><text class="t" x="264" y="162">凭证·脱敏</text><text x="264" y="182">透传·私有存储</text></g>
+<g class="bx" data-s="0"><rect x="376" y="140" width="96" height="56" rx="8"/><text class="t" x="386" y="162">Proxy</text><text x="386" y="182">压缩·转发</text></g>
+<g class="bx" data-s="5"><rect x="498" y="140" width="96" height="56" rx="8"/><text class="t" x="508" y="162">完整性</text><text x="508" y="182">字节原样</text></g>
+<g class="bx" data-s="0"><rect x="620" y="140" width="96" height="56" rx="8"/><text class="t" x="630" y="162">Upstream</text><text x="630" y="182">模型端点</text></g>
+<g class="bx" data-s="3"><rect x="132" y="250" width="96" height="52" rx="8"/><text class="t" x="142" y="272">会话隔离</text><text x="142" y="290">id·人格分裂</text></g>
+<g class="bx" data-s="4"><rect x="254" y="250" width="96" height="52" rx="8"/><text class="t" x="264" y="272">落盘</text><text x="264" y="290">共享·可加密</text></g>
+<g class="bx" data-s="6"><rect x="376" y="250" width="96" height="52" rx="8"/><text class="t" x="386" y="272">摘要</text><text x="386" y="290">注入持久化</text></g>
+<g class="bx" data-s="7"><rect x="498" y="250" width="96" height="52" rx="8"/><text class="t" x="508" y="272">自更新</text><text x="508" y="290">校验·回滚</text></g>
+<g class="bx" data-s="8"><rect x="620" y="250" width="96" height="52" rx="8" stroke-dasharray="5 4"/><text class="t" x="630" y="272">安装通道</text><text x="630" y="290">单写者</text></g>
+</svg></div>
+<figcaption id="cap"></figcaption></figure>
+
+<div class="nav" style="position:static;border:0;padding:0"><button id="prev">← 上一步</button><button id="next">下一步 →</button><span class="sp"></span><button id="allb" aria-pressed="false">全文连读</button></div>
+<div id="steps">
+
+<section class="step" data-s="0"><h2>S0 · 最朴素：本机单用户透传</h2>
+<div class="say"><span class="k">怎么说：</span>最朴素的代理就是监听本机端口，把客户端请求连同它的 key 原样转给上游，什么都不存。此时只有一条隐含的信任边界：<b>本机即可信</b>。但只要它开始存会话摘要、被共享给局域网、能装插件和自更新，每一项都新增一类攻击面。所以我不把“安全”当一个功能，而是沿着这几项新增能力逐个加边界。</div>
+<div class="row"><h3>这个朴素版的洞</h3><ul><li>谁能碰管理接口、谁能让代理替它发请求 → S1</li><li>key 经过代理，日志里会不会漏 → S2</li><li>多个会话共用一个代理，上下文会不会串 → S3</li><li>落盘的会话内容谁能读 → S4</li><li>代理“优化”了载荷，会不会改坏用户意图 → S5</li><li>压缩把不可信内容写进了长期记忆 → S6</li><li>代理自己要更新，更新通道被污染怎么办 → S7</li><li>同一台机器上有多份副本，谁来更新谁 → S8</li></ul></div>
+<div class="bridge"><span class="k">过渡句：</span>“先看最外层：谁有资格对代理说话。”</div>
+</section>
+
+<section class="step" data-s="1"><h2>S1 · 信任边界：管理面与隧道</h2>
+<div class="row"><h3>痛点</h3><ul><li>用户会用 <code>--host 0.0.0.0</code> 把代理共享给局域网，但管理接口能改上游路由，等于能把 key 引到别处。</li><li>代理支持 <code>/bili/&lt;绝对 URL&gt;</code> 零配置转发，内层连接由代理自己发起，会绕过“来源是 loopback”的判断，成为 SSRF 跳板。</li><li>浏览器 DNS rebinding：恶意域名解析到 127.0.0.1，同源请求可能不带 Origin。</li></ul><h3>补丁</h3><ul><li><b>管理路径只认 loopback</b>，即使监听 0.0.0.0 也一样；模型流量路径才对外开放。</li><li><b>Host 必须是 loopback 名字</b>（忽略端口，因为 ssh -L 会改端口），防 rebinding。</li><li><b>隧道打标记</b>：经隧道转发的请求带内部头，管理路径见到该头直接 403，连 loopback 客户端也不例外。</li><li><b>隧道目的地准入</b>：禁止指向代理自己、链路本地/云元数据地址；私有地址只对 loopback 客户端开放，远端客户端需显式白名单；先解析域名再判定；解析瞬时失败返回 5xx 而不是 403，不让客户端误判为权限问题。</li><li><b>MITM 只终止白名单域名的 TLS</b>：硬编码默认仅 3 个模型端点，另加用户额外配置和从客户端配置文件自动发现的域名；注释明说“扩大名单就是扩大安全边界”。</li><li><b>插件协议头只在带插件标记时才被采信</b>（会话 id、窗口大小等），避免任意客户端操纵身份与计费分母（身份侧见第 4 章）。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>我的原则是<b>默认收紧，按证据放宽</b>：管理面和数据面分开，管理面只认本机；任何“代理替别人发请求”的能力（隧道、MITM）都要做目的地准入。诚实地说，<b>模型流量路径本身没有客户端认证</b>：配置文档明说 0.0.0.0 “无认证，只适合可信网络”，局域网内任何人都能走你的代理。<span class="tag">[文档]</span> 客户端自带 key 时这只是白用代理；但如果配置了 lane 凭证覆盖（S2），代理会换上自己持有的 key，这时远端客户端就可能借用它（我没做过实测，是从两处代码推出来的）。<span class="tag">[推断]</span> 我会在非 loopback 绑定时要求一个共享 token 或 mTLS。<span class="tag">[推断]</span></div>
+<div class="cmp"><div><b>pi</b>项目目录里的配置和扩展会被执行，所以先问“是否信任此项目目录”，无 UI 时默认不信任；信任结果可持久化。<span class="tag">[代码]</span></div><div><b>codex</b>独立的 network-proxy 组件，有域名匹配、connect 策略、MITM、凭证 broker 等模块；具体策略逻辑我只看了模块划分，未逐行读。<span class="tag">[推断]</span></div><div><b>本项目</b>loopback 管理面 + Host 钉死 + 隧道标记 + 目的地准入 + MITM 白名单；对应 <code>server/admin.ts</code>、<code>tunnel-guard.ts</code>、<code>mitm.ts</code>。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：为什么 loopback 客户端经隧道也不能碰管理面？</summary><p>隧道的内层连接从代理进程自己发出，来源地址天然是 loopback，只看来源地址就会放行。所以要靠“经隧道”这个事实本身（标记头）来拒绝。这是典型的 confused deputy：代理用自己的身份替别人办事。<span class="tag">[代码]</span></p></details>
+<details><summary>追问：DNS rebinding 怎么防？</summary><p>攻击者域名解析到 127.0.0.1，浏览器同源请求可能没有 Origin，所以不能只查 Origin。必须钉死 Host 必须是 loopback 名字，rebinding 域名永远不等于 loopback 名字。<span class="tag">[代码]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“边界之内，最敏感的东西是凭证：它经过代理，会不会留下痕迹。”</div>
+</section>
+
+<section class="step" data-s="2"><h2>S2 · 凭证与日志：少持有，少泄漏</h2>
+<div class="row"><h3>痛点</h3><ul><li>请求里有 Authorization/x-api-key，上游错误体可能回显 key，日志常被贴到公开 issue。</li><li>有些场景代理必须自己持有 key（统一上游、摘要服务），key 存哪里？</li><li>客户端到代理的凭证（如 proxy-authorization）不该被带到模型端点。</li></ul><h3>补丁</h3><ul><li><b>默认透传客户端凭证，不落盘</b>；hop-by-hop 头和 <code>proxy-authorization</code> 在转发时剔除。</li><li><b>lane 凭证覆盖</b>：只能引用（环境变量名或私有存储里的名字），不在配置文件里写明文；<code>authorization</code> 仅在客户端值是 Bearer 时才替换（其他方案归签名所有，保留）；解析失败时保留客户端头并只告警一次，不静默变成必然 401。</li><li><b>私有凭证存储</b>独立于主配置文件：普通配置读取/导出永远读不到；读取时要求普通文件、非符号链接、权限不含 group/other 位（Windows 除外），限制 256KB，引用名与值都校验格式。</li><li><b>agent 上报的 key 只在进程内存</b>，不返回给配置 API、不进日志，且明文 HTTP 非 loopback 不接收。</li><li><b>日志脱敏分两层</b>：调用点做结构化脱敏（凭证类头只留长度、URL 去掉 userinfo/query、私有主机换占位符、公共 API 主机白名单可原样）；<b>出口处</b>再对整行做一次正则兜底（凭证形态的 token、非 loopback IP）。</li><li>会话 id 来自客户端，写进调试文件名和日志标签前先清洗字符（日志标签另限长 160）。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>凭证策略是<b>最小持有 + 纵深脱敏</b>。默认让 key 只“路过”；必须持有时放进独立的私有存储并校验权限；日志脱敏不能只靠一层：调用点知道结构，出口正则能兜住漏网的，但正则只能是兜底，认不出陌生形态的 key。还有一个设计取舍：不为每个凭证分会话，因为凭证会轮换，按凭证分会话会在用户继续对话时丢状态（S3）。代价是这意味着<b>凭证不是租户边界</b>。</div>
+<div class="cmp"><div><b>pi</b>auth.json 以 0600 写入并用文件锁；有“仅运行时、不持久化”的 key 覆盖层；配置值以 <code>!</code> 开头表示执行 shell 命令取值。<span class="tag">[代码]</span></div><div><b>codex</b>凭证存储模式有 File/Keyring/Auto/Ephemeral 四种；有 secrets 脱敏器（对 sk- key、Bearer、AWS key、key=value 形态做正则替换，注释明说是 best effort）；network-proxy 里有 credential broker，从模块与类型名看是“沙箱内只见占位值，由代理在出口换成真值”，机制细节我未逐行读。<span class="tag">[代码]</span><span class="tag">[推断]</span></div><div><b>本项目</b>透传为主，lane 覆盖为辅，私有存储 + 双层日志脱敏；对应 <code>lane-credentials.ts</code>、<code>external-summary-credentials.ts</code>、<code>log-mask.ts</code>、<code>logger.ts</code>。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：为什么出口正则不能代替调用点脱敏？</summary><p>正则只认已知形态，私有 relay 的 key、自定义头里的 token 它认不出；而且误伤（把正常文本当 key）会损害排障。调用点知道“这是 Authorization 头”，所以能整体替换；出口正则抓的是 upstream 错误体回显等自由文本。两层互补。<span class="tag">[代码]</span></p></details>
+<details><summary>追问：codex 的“占位值换真值”思路对代理意味着什么？</summary><p>它把凭证托管从沙箱里的 agent 挪到网络层，agent 被攻破也拿不到真 key。本项目的 lane 覆盖是同方向的弱版本（客户端可以不持有真 key），但本项目没有沙箱，客户端默认仍持有自己的 key。<span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“凭证管住了，下一个问题是：多个会话共用一个代理时，上下文凭什么不串。”</div>
+</section>
+
+<section class="step" data-s="3"><h2>S3 · 会话隔离：身份就是租户边界</h2>
+<div class="row"><h3>痛点</h3><ul><li>代理按会话保存压缩状态；会话键如果错了，就是跨会话串上下文（数据泄漏），或同一对话被拆开（重付成本）。</li><li>同一个会话 id 会被不同“人格”复用：子 agent、自动审查器、标题生成器。让它们共享状态既串上下文，又会把主会话基线覆盖掉。</li><li>匿名客户端没有任何 id。</li></ul><h3>补丁</h3><ul><li><b>客户端给的 id 原样作键</b>，不混入凭证、协议、上游（身份规则与理由见第 4 章；这里只看它的隔离含义）。</li><li><b>匿名请求用前缀亲和</b>：把回放的历史做成哈希链，先要求“头部哈希完全一致”才认回旧会话；分叉后自然另起一个。注释里的安全论证：匹配需要持有相同的头部，所以折叠状态不会泄露请求者本来不知道的东西。精确匹配落空时还有一道 simhash 对齐的第二梯（见下方追问）。</li><li><b>人格分裂</b>：codex 的子线程用 thread-id（要求 metadata 与头交叉一致），只有 <code>user</code> 来源并入根会话，所以 guardian 审查线程读到的是用户原始授权，而不是压缩摘要；Claude Code 子 agent 必须“头部信号 + 系统提示里没有主 agent 前缀”两个条件同时满足才拆（动机主要是避免子 agent 与主回合在会话锁上互相阻塞，并让各自的压缩状态独立）；dsh 按“id + system 哈希”拆，且旁路请求（标题生成）不抢占锚点。</li><li><b>拆分是证据白名单</b>：只有被流量证实复用 id 的宿主才进名单，其余一律不拆。</li><li>同一会话请求串行化（会话锁），避免并发写同一状态。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>隔离设计的核心是<b>两种错误的代价不对称</b>：把两个对话错合并是数据串扰，属于安全问题；把一个对话错拆开只是多花钱、丢压缩状态。所以“拆”的判据要收紧：默认不拆（因为 system 漂移多半是同一对话在演进），只有有流量证据的宿主才拆；判据失效时的退化方向也是设计过的：主会话永远不会被误拆，最坏是子 agent 不再被拆、回到共享同一会话串行执行（仍在同一用户的同一会话内）。但要诚实：<b>id 是客户端自选的，没有租户命名空间</b>，两个客户端选了同一个 id 就共享会话。本项目假设“同一台机器同一个用户”，不是真多租户。<span class="tag">[推断]</span></div>
+<div class="cmp"><div><b>pi / codex</b>自己持有 history，不存在“代理按 id 找状态”这一层；codex 的 guardian 审查线程需要读到用户原始授权，这也是本项目要给它独立会话的原因。<span class="tag">[推断]</span></div><div><b>本项目</b><code>session-id.ts</code>（id 优先级、codex turn 元数据、Claude 子 agent 拆分、dsh 人格指纹）、<code>prefix-affinity.ts</code>（头部锚定哈希链）；AGENTS.md KDD#9 的证据白名单纪律。<span class="tag">[代码]</span></div><div><b>LangGraph</b>开源库本身没有鉴权，租户隔离要靠自己管 thread_id / namespace（推断）；Agent Server 提供自定义 auth：<code>@auth.authenticate</code> 识别用户，<code>@auth.on</code> 在创建时写 owner 元数据、读取时返回过滤条件，Store 命名空间另有 <code>@auth.on.store()</code>。<span class="tag">[文档]</span><span class="tag">[推断]</span></div></div>
+<details><summary>追问：为什么不把凭证放进会话键来隔离租户？</summary><p>因为凭证会轮换（OAuth bearer）、用户会切 relay 和协议。放进键里，用户继续对话时状态就孤立了（#286 的教训）。如果要做真多租户，应该用<b>经过认证的主体</b>作命名空间前缀，而不是可轮换的凭证本身。<span class="tag">[推断]</span></p></details>
+<details><summary>追问：前缀亲和容忍近似匹配吗？</summary><p>主路径不容忍：先走头部锚定的精确哈希链。尾部窗口重新挂靠（#316）后来被移除，因为它无法区分“同一对话被截断”和“不同对话引用了相同模板内容”（#1115）。<span class="tag">[代码]</span> 但精确匹配落空、即将新建会话（会孤立折叠状态）之前，还有一道 simhash 对齐的第二梯（#2265）：逐位置 Hamming 距离、至少 90% 位置相似、至少一条字节相同的用户消息、深度不少于 8，且要求相当比例位置被“整体改写”，这样编辑后重发的点状分叉仍会另起会话。它用来吸收客户端对每条消息的装饰性改写。<span class="tag">[代码]</span> 这一梯的“持有相同头部”论证比精确匹配弱，靠高门槛兜住，我认为它是整个身份层里最该盯的误并风险点。<span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“键对了还不够，会话状态还要落盘，磁盘上这份谁能读。”</div>
+</section>
+
+<section class="step" data-s="4"><h2>S4 · 落盘与多用户：诚实的边界</h2>
+<div class="row"><h3>痛点</h3><p>会话文件里有块摘要和最多约 16k token 的折叠原文，源码注释称其“实质是完整对话内容”（代码、粘贴过的凭证）；代理可能跑在不可信节点上。<span class="tag">[代码]</span></p><h3>现状</h3><ul><li><b>静态加密可选</b>：AES-256-GCM，密钥只从环境变量取（机制与侧车拒绝明文见第 4 章），威胁模型写在 <code>encrypt.ts</code> 头部：节点不可信、会话文件近似完整对话。</li><li><b>MITM 的 CA 私钥</b>以 0600 写入；默认不加密，会话/内容存储只靠用户 home 下的文件权限。</li><li><b>所有实例共享同一份数据目录</b>（会话记录、内容存储、前缀亲和）；Web UI 会扫描整个共享存储，任何能访问 loopback 端口的人可读任意会话。</li><li>文档自己写明：<b>单用户主机足够，多用户主机不够</b>（没有 per-session 授权）；根治方案（按用户/lane 分目录）是仍未决定的架构问题。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>这一步我会<b>直接承认缺口</b>：本项目的“隔离”是会话级的逻辑隔离，不是租户级的访问控制，没有 per-session 授权。文档把这个安全姿态写明了，我认为这比含糊其辞更专业。如果要做真多租户，我会补三件事：<b>认证主体 → 命名空间</b>（会话键、磁盘目录、加密密钥都按主体派生）；<b>管理面和 Web UI 带鉴权并按主体过滤</b>；<b>保留期与回收</b>（摘要里的敏感内容不该永久留存）。<span class="tag">[推断]</span></div>
+<div class="cmp"><div><b>pi / codex</b>本质上是单用户本地应用，状态在各自 home 下，不存在“一个进程服务多个主体”的问题。<span class="tag">[推断]</span></div><div><b>本项目</b>共享数据目录 + loopback 门 + 可选 AES-GCM；见 TECHNICAL-NOTES.md 的 multi-instance security boundary 一节与 <code>encrypt.ts</code>。<span class="tag">[代码]</span></div><div><b>LangGraph</b>checkpoint 落盘加密是可选项：<code>EncryptedSerializer</code>（AES，密钥来自 <code>LANGGRAPH_AES_KEY</code>），默认序列化器是 JsonPlusSerializer；存储后端由部署方选。<span class="tag">[文档]</span></div></div>
+<details><summary>追问：密钥为什么不放配置文件？</summary><p>威胁模型是“磁盘/节点不可信”，密钥与密文同盘就失去意义，所以只从进程环境读。代价是运维要自己管密钥分发，丢了就不可恢复。<span class="tag">[代码]</span>（编码格式见第 4 章）</p></details>
+<details><summary>追问：多个实例共享目录还有什么风险？</summary><p>可见性之外还有写入竞态：缓解手段（计数器守卫等）见第 4 章。要点是它们是数据层的一致性守卫，不是授权，不改变“能连上 loopback 端口就能读全部会话”这条边界。<span class="tag">[代码]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“数据平面讲完。回到转发本身：代理有没有可能成为‘完整性攻击者’。”</div>
+</section>
+
+<section class="step" data-s="5"><h2>S5 · 完整性：不替用户改写载荷</h2>
+<div class="row"><h3>痛点</h3><ul><li>模型有时会回显代理的渲染标签；一个“顺手”的过滤器在流里把它们剥掉，看起来很干净。</li><li>但 tool call 参数会被宿主执行或写盘：用户合法写入的内容里也可能含这种形状的字符串，被剥掉就是<b>静默数据损坏</b>（#933 的过滤后来变成 #1039）。</li><li>Anthropic 的 thinking 块、Gemini 的 thoughtSignature 带签名，回放时要求逐字节一致；任何改写会让会话在重发时被拒，且客户端会持久化这份被改过的历史（#1960）。</li></ul><h3>补丁</h3><ul><li><b>tool call 参数一律字节原样转发</b>（所有线格式、分片与整体），标签回显剥离只用于模型的文字输出。</li><li><b>thinking 家族块永不改写</b>：不去标签、不去重、不裁剪、不调整块顺序；这类改动要求在“重发请求体 + 客户端可见流”两个层面做字节相等测试，且覆盖两种签名线格式。</li><li><b>线格式约束只增不减</b>：每个上游拒绝过的约束进入常驻测试表与“验证对等”的假上游；工具模式与关键常量有 golden 快照，重新生成需写明理由。</li><li><b>疏不堵</b>：先找出产生问题字节的源头，在源头修（回显噪声属于注入侧的渲染策略），不在传输途中做“让症状不可见”的改写。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>代理的价值在于改上下文，但它<b>改的范围必须有硬边界</b>：凡是会被执行、被签名校验、被持久化的字节，代理都是“搬运工”，不是“编辑”。形状过滤区分不了“回显”与“用户真想写的字面量”，所以任何这类过滤都是掩盖。这是完整性问题，也是安全问题：被篡改的 bash 命令字符串就是被篡改的用户意图。</div>
+<div class="cmp"><div><b>pi</b>工具参数经 schema 校验后交给工具，不做内容改写。<span class="tag">[推断]</span></div><div><b>codex</b>审批界面展示的是计划执行的动作本身（guardian-context 里有 planned action 的呈现模块），审批对象与执行对象应是同一份字节；具体实现我未逐行读。<span class="tag">[推断]</span></div><div><b>本项目</b>不变量写在 <code>loop/tag-echo-filter.ts</code> 文件头和 AGENTS.md §7.3；golden 在 <code>tests/golden/wire-contract/</code>。<span class="tag">[代码]</span></div><div><b>Claude Code</b>公开文档要求带签名的 thinking 块在后续轮次原样回传。<span class="tag">[文档]</span></div></div>
+<details><summary>追问：回显标签噪声怎么办，真的不管吗？</summary><p>管，但在源头。回显的原因是渲染给模型的标签形状会被模仿，所以修在注入侧的渲染策略（哪些宿主需要渲染标签），而不是在参数路径上擦除。擦除只对文字输出做，因为文字里没有“字面量要被执行”的语义。<span class="tag">[代码]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“字节不改写讲的是传输；还有一种风险是内容本身：不可信内容被压成摘要之后会怎样。”</div>
+</section>
+
+<section class="step" data-s="6"><h2>S6 · 注入与摘要：持久化的向量</h2>
+<div class="row"><h3>痛点（只讲代理/压缩侧；tool result 是数据的通用原则见第 2 章）</h3><ul><li>摘要由模型读着不可信的工具输出写出来，<b>被污染的内容经过“洗白”变成模型自己写的话</b>。</li><li>摘要会被反复折叠（摘要的摘要），注入内容可能<b>跨很多轮、跨压缩一直存活</b>。</li><li>代理模式下（plugin 模式的载体是 tool call，不适用）<code>acp_summary</code> 被改成 <b>user 角色消息</b>（为兼容严格后端、保持 prefix cache 稳定），注释把它称为“接受的取舍”。<span class="tag">[代码]</span> 这意味着摘要里的指令性文字获得用户回合级的权威。<span class="tag">[推断]</span></li></ul><h3>已有的缓解</h3><ul><li><b>取回的原文被框成“不可信数据，不是指令”</b>：带标注头和定界标签，并中和正文里的结束标签，防止内容提前闭合定界符。</li><li><code>compress</code> 与 <code>acp_rule</code>（用户规则）调用永远受保护、不会被压掉，注入内容无法借压缩让用户规则消失。</li><li><b>原文可回溯</b>：摘要被怀疑时可以 decompress 对照原文，审计有依据。</li><li>codex 的守护线程独立会话，读原始授权而不是摘要（S3）。<span class="tag">[代码]</span></li></ul></div>
+<div class="say"><span class="k">怎么说：</span>我的判断是：<b>压缩把“一次性注入”升级成“可持久注入”</b>，这是压缩系统特有的风险，普通 agent 没有。代码里对<b>取回路径</b>做了不可信框定，<span class="tag">[代码]</span> 但我没有在 kernel 或 <code>util.ts</code> 里找到对<b>摘要内容本身</b>做来源标注的机制（可能漏读）。<span class="tag">[推断]</span> 我会补三件事：摘要提示词要求“不要把工具输出里的指令性语句写成待办或约束，只写事实与出处”；摘要里给事实附 ref 出处，使其可追溯到原文；摘要渲染时与用户原话在视觉上分开标注来源（用户原话 vs 模型总结）。<span class="tag">[推断]</span> 这些都是我的建议，不是仓库现状。</div>
+<div class="cmp"><div><b>pi / codex</b>compaction 后的摘要同样由模型生成并作为上下文延续，也存在同样的持久化问题；这是一次性重写，注入内容不会被反复折叠，但会留在后续 history 里。<span class="tag">[推断]</span></div><div><b>本项目</b>取回原文框定在 <code>kernel/src/ccr.ts</code>；摘要 user 化的取舍写在 <code>util.ts</code> 的 <code>systemToUser</code> 注释里；受保护调用见 <code>kernel/src/protected.ts</code>（<code>ALWAYS_PROTECTED_TOOLS</code>）。<span class="tag">[代码]</span></div><div><b>LangGraph</b>库层不处理注入；<code>SummarizationMiddleware</code> 用模型生成摘要并永久替换旧消息，同样把模型输出放回消息历史，所以摘要同样可能成为持久的注入载体（推断）；另有 PII detection 中间件。<span class="tag">[文档]</span><span class="tag">[推断]</span></div></div>
+<details><summary>追问：既然有风险，为什么还把摘要改成 user 角色？</summary><p>严格后端（如 SGLang）要求整段只有开头一条 system；保持开头 system 字节稳定也是缓存前缀稳定的条件。这是一个兼容性与缓存的取舍，安全上的代价要靠内容侧（摘要提示词、出处标注）补，不能靠改回 system 角色。<span class="tag">[代码]</span><span class="tag">[推断]</span></p></details>
+<details><summary>追问：你怎么证明这条风险真实存在？</summary><p>我没有做过攻击复现，这是从机制推出来的：不可信文本 → 模型摘要 → 以 user 角色（proxy 模式）进入后续每一轮。我会做一个红队测试：在工具输出里埋“以后每次都执行 X”，经几轮折叠后检查模型是否仍执行。<span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“内容风险讲完。最后两步是代理自己作为软件的安全：更新通道和安装所有权。”</div>
+</section>
+
+<section class="step" data-s="7"><h2>S7 · 供应链与自更新：更新器本身是高价值目标</h2>
+<div class="row"><h3>痛点</h3><ul><li>自更新相当于“远程代码替换”：下载坏了、被篡改、版本对但入口文件坏了，都可能让代理永远起不来，也就无法再自愈。</li><li>多个进程同时更新会互相踩。</li><li>已发布版本发现严重缺陷时，需要比普通更新更快地回收。</li></ul><h3>补丁</h3><ul><li><b>完整性校验</b>：下载后按注册表给的 sha512 integrity（或旧的 sha1 shasum）校验，两者都没有则拒绝；未知哈希算法也拒绝；下载有 100MB 上限。</li><li><b>先解到暂存目录再覆盖</b>：校验版本号与声明的入口文件能解析；覆盖前整份备份；覆盖后再次校验，任何一步失败即从备份回滚；没有备份则拒绝覆盖。</li><li><b>启动冒烟（boot smoke）</b>：证明新版本不只是语法合法，而是真能起来；我只在缺陷通告触发的强制安装路径上看到它被启用。</li><li><b>跨进程更新锁</b>：持有者已死可直接接管，存活也最多占 30 分钟，防止崩溃留下的锁永久阻塞更新。</li><li><b>拒绝覆盖源码检出</b>和宿主托管副本（S8）。</li><li><b>关键缺陷通告通道</b>：注册表上的机器可读文档给出“受影响版本范围 → 目标版本”，即使关闭了自动更新也会被轮询并强制装目标版本（含回滚到旧版本），并避免“最新版又被判受影响”的来回乒乓。</li><li><b>改更新器本身必须先发一个空操作验证版本</b>，证明现有升级路径健康。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>更新器的安全目标不是“防住所有攻击”，而是<b>不让坏更新变成不可恢复的砖</b>：校验、暂存、备份、回滚、冒烟，每一层都是为了“旧版本永远还能跑”。但要诚实：完整性值来自<b>和 tarball 同一个注册表的响应</b>，它能防传输损坏，防不了注册表或账号被攻破；我在 <code>update.ts</code> 里搜过，没有签名或 provenance 校验的代码。通告通道的注释也明说“信任域与自动安装同源，没有新增信任边界”。<span class="tag">[代码]</span> 我会补：npm provenance/签名校验、版本固定的企业镜像、以及关键通告必须带独立签名，避免通告通道成为“强制安装任意版本”的后门。<span class="tag">[推断]</span></div>
+<div class="cmp"><div><b>pi</b>扩展/包通过自己的 <code>pi update</code> 通道更新，由宿主驱动；本项目对 pi 副本也只走这个通道。<span class="tag">[代码]</span></div><div><b>codex</b>独立二进制发布，更新走其发行渠道；我未研究其自更新细节。<span class="tag">[推断]</span></div><div><b>本项目</b><code>update.ts</code>（校验、备份回滚、锁）、<code>advisory.ts</code>（缺陷通告）；AGENTS.md §5 “改 update.ts 须先发空操作版本”。<span class="tag">[代码]</span></div><div><b>Claude Code</b>原生安装器带自动更新，公开文档提供关闭自动更新的开关；内部校验机制我不了解。<span class="tag">[文档]</span></div></div>
+<details><summary>追问：为什么不直接 npm install -g？</summary><p>它做不到“解到暂存目录、备份、回滚”这套安全链，全局安装还可能因权限无声失败。<span class="tag">[推断]</span> 代价是自己要维护一套安装逻辑，所以才要求“改更新器先发空操作版本”。<span class="tag">[代码]</span></p></details>
+<details><summary>追问：通告通道会不会被滥用？</summary><p>会，这是它的风险面：它能在用户没开自动更新时强制装指定版本。缓解是它复用更新器的全部安全链、失败 fail-open（不阻塞模型流量），并且信任域与现有自动安装一致（注册表账号被攻破则一起失守）；但如果注册表账号被攻破，两者一起失守。<span class="tag">[代码]</span><span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“更新器怎么写讲完了。但一台机器上往往有多份副本，谁有资格更新哪一份？”</div>
+</section>
+
+<section class="step" data-s="8"><h2>S8 · 安装通道与所有权：一份副本，一个写者</h2>
+<div class="row"><h3>痛点</h3><ul><li>同一台机器上同时存在：全局 npm 安装、宿主的插件目录（pi/opencode/dsh）、pnpm 存储、开发检出。</li><li>如果 bili 自己改写别人管理的副本，会和宿主的更新、完整性校验打架（甚至改写 pnpm 的共享存储）。</li><li>如果又不更新它们，这些副本会永远冻结在旧版本。</li><li>配置也有类似问题：读-改-写用户配置时，若解析失败后用默认值覆盖，会静默丢掉用户的自定义项。</li></ul><h3>补丁（Install-Lane 契约）</h3><ul><li><b>按安装来源决定写者</b>：宿主通道安装的副本归宿主，bili 绝不就地改写；<code>bili plugin install</code> 只“驱动宿主自己的通道”，不再装第二份。</li><li><b>每份副本必须有活的更新路径</b>：要么就是全局安装（原地自更新）；要么是引用型入口（不复制，指向全局 dist）；要么在宿主世界里经宿主通道更新，没有全局时由副本自己的定期检查驱动。</li><li><b>本地 link/file 固定永不刷新</b>，开发通道跟随检出。</li><li><b>写配置前备份、幂等</b>（只在文件自上次 bili 写入后被用户改过时重新快照）；Web 配置接口在磁盘配置无法解析时返回 409 拒绝覆盖。读取侧遇到损坏的配置只记录错误并回落默认值，所以写入侧的守卫是关键。<span class="tag">[代码]</span></li><li>“漂移”可以短暂存在（约一个检查周期加宿主重启），永久分歧算缺陷。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>多副本问题的关键是<b>所有权而不是权限</b>：能写不等于该写。我会把规则压成一句：谁装的谁更新，自愈只走所有者认可的通道，绝不绕过。这既是安全（不覆盖别人已校验的内容），也是可靠性（避免两个写者互相踩）。配置同理：宁可拒绝，也不要在不确定时静默写入。我核对了 Web 配置接口的 409 守卫和插件安装的备份逻辑，但没有逐个验证所有写入点。<span class="tag">[推断]</span></div>
+<div class="cmp"><div><b>pi</b>项目信任（S1 已讲）：信任之前不加载项目配置和扩展；与“谁有资格写/执行哪份副本”是同一类问题的两面。<span class="tag">[代码]</span></div><div><b>codex</b>进程加固：启动前关闭 core dump、禁止 ptrace 附加、清理 <code>LD_PRELOAD</code>/<code>DYLD_*</code>，属于对自身进程的防护。<span class="tag">[代码]</span></div><div><b>本项目</b>单写者契约（AGENTS.md #1196/#991）、<code>hostManagedInstall</code> 识别宿主托管副本、<code>plugin-install.ts</code> 只驱动宿主通道并备份。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：为什么引用型入口不复制？</summary><p>复制就多了一个需要更新的副本，也就多了一个会冻结的副本。引用型入口指向全局 dist，自动跟随，只有一个写者。代价是依赖全局安装存在；所以宿主世界（有自己沙盒目录的）才允许自包含副本。<span class="tag">[代码]</span></p></details>
+<details><summary>如果重做，我会改这四点</summary><ol><li>非 loopback 绑定时强制客户端认证（共享 token 或 mTLS）。<span class="tag">[推断]</span></li><li>会话键、磁盘目录、加密密钥按认证主体派生，做真多租户。<span class="tag">[推断]</span></li><li>摘要加来源标注与注入红队回归测试。<span class="tag">[推断]</span></li><li>更新链加签名/provenance 校验，通告通道独立签名。<span class="tag">[推断]</span></li></ol></details>
+</section>
+</div>
+
+<h2>一页复习卡</h2>
+<p class="sub">点任意一行跳到对应步骤。</p>
+<div class="scrollt"><table id="tbl">
+<tr><th>步骤</th><th>痛点</th><th>补丁</th><th>新代价 → 引出</th><th>不变量</th></tr>
+<tr class="link" data-j="0"><td>S0 透传</td><td>本机即可信的隐含假设</td><td>—</td><td>→ 谁能对代理说话</td><td>—</td></tr>
+<tr class="link" data-j="1"><td>S1 边界</td><td>管理面暴露、隧道 SSRF、rebinding</td><td>loopback 管理面、Host 钉死、隧道标记与准入、MITM 白名单</td><td>模型路径仍无客户端认证 → 凭证</td><td>①</td></tr>
+<tr class="link" data-j="2"><td>S2 凭证</td><td>key 经过代理、日志泄漏</td><td>透传、引用式 lane 凭证、私有存储、双层脱敏</td><td>凭证不是租户边界 → 会话</td><td>①</td></tr>
+<tr class="link" data-j="3"><td>S3 隔离</td><td>会话键错了串上下文、人格复用 id</td><td>id 原样、头部锚定亲和、证据白名单分裂</td><td>id 客户端自选，无租户命名空间 → 落盘</td><td>①</td></tr>
+<tr class="link" data-j="4"><td>S4 落盘</td><td>磁盘上是完整对话内容</td><td>可选 AES-GCM、密钥只在环境</td><td>多用户主机不安全 → 完整性</td><td>①</td></tr>
+<tr class="link" data-j="5"><td>S5 完整性</td><td>过滤器误伤参数、签名块被改</td><td>参数与 thinking 字节原样、约束只增不减、疏不堵</td><td>内容本身也有风险 → 注入</td><td>②</td></tr>
+<tr class="link" data-j="6"><td>S6 注入</td><td>摘要洗白并持久化不可信内容</td><td>取回框定为不可信、受保护调用、可回溯；建议补来源标注</td><td>缓解不完整 → 软件自身安全</td><td>②</td></tr>
+<tr class="link" data-j="7"><td>S7 更新</td><td>坏更新成砖、通道被污染</td><td>integrity、暂存、备份回滚、冒烟、锁、缺陷通告</td><td>仅同源完整性 → 多副本</td><td>③</td></tr>
+<tr class="link" data-j="8"><td>S8 通道</td><td>多副本互踩或冻结</td><td>单写者、引用型入口、只驱动宿主通道、配置先备份</td><td>—</td><td>③</td></tr>
+</table></div>
+</main>
+
+<script>
+(function(){
+var CAP=["S0：Client 经 Proxy 把请求和凭证原样转给 Upstream。","S1：加入边界闸：管理面只认 loopback，隧道做准入。","S2：加入凭证与日志脱敏层。","S3：Proxy 之下加入会话隔离：会话键与人格分裂。","S4：会话状态落盘：共享目录、可选加密。","S5：转发路径上强调字节原样的完整性。","S6：压缩带来的摘要成为注入的持久化向量。","S7：代理自身的更新链：校验、备份、回滚。","S8：安装通道与所有权：一份副本只有一个写者。"];
+var cur=0,all=false;
+var steps=[].slice.call(document.querySelectorAll('.step')),N=steps.length-1,nav=document.getElementById('nav'),btns=[];
+function exitAll(){if(all){all=false;document.getElementById('steps').classList.remove('all');document.getElementById('allb').setAttribute('aria-pressed',false)}}
+for(var i=0;i<=N;i++){(function(i){var b=document.createElement('button');b.textContent='S'+i;b.onclick=function(){exitAll();set(i)};nav.appendChild(b);btns.push(b)})(i)}
+var rb=document.createElement('button');rb.textContent='↺ 重置';rb.onclick=function(){exitAll();set(0)};nav.appendChild(rb);
+var svgEls=[].slice.call(document.querySelectorAll('svg [data-s]'));
+function set(n){cur=Math.max(0,Math.min(N,n));
+steps.forEach(function(s){s.classList.toggle('on',+s.dataset.s===cur)});
+btns.forEach(function(b,i){b.setAttribute('aria-pressed',i===cur)});
+svgEls.forEach(function(e){var s=+e.dataset.s,show=all||s<=cur;
+if(e.dataset.h&&(all||cur>=+e.dataset.h))show=false;
+e.classList.toggle('vis',show);
+if(e.classList.contains('bx')||e.classList.contains('ln')){e.classList.toggle('new',!all&&s===cur&&cur>0)}});
+document.getElementById('cap').textContent=all?"全貌：把所有环节放在一起。":CAP[Math.min(cur,CAP.length-1)];
+document.getElementById('prev').disabled=cur===0;document.getElementById('next').disabled=cur===N}
+function top1(){document.getElementById('nav').scrollIntoView({behavior:'smooth',block:'start'})}
+document.getElementById('prev').onclick=function(){exitAll();set(cur-1);top1()};
+document.getElementById('next').onclick=function(){exitAll();set(cur+1);top1()};
+var ab=document.getElementById('allb');
+ab.onclick=function(){all=!all;document.getElementById('steps').classList.toggle('all',all);ab.setAttribute('aria-pressed',all);set(cur)};
+[].forEach.call(document.querySelectorAll('tr.link'),function(r){r.onclick=function(){exitAll();set(+r.dataset.j);top1()}});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'){exitAll();set(cur+1)}if(e.key==='ArrowLeft'){exitAll();set(cur-1)}if(e.key==='Escape'){exitAll();set(0)}});
+set(0);
+})();
+</script>

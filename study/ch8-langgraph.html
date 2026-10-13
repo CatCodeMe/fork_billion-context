@@ -1,0 +1,216 @@
+<title>LangGraph 与多智能体演进讲法</title>
+<main>
+<h1>LangGraph 与多智能体：一条演进主线</h1>
+<p class="sub">面试官大概率熟悉 LangGraph，所以这一章让你把前 7 章的概念翻译成图的语言，并能把“多 agent 结果在 LangGraph 层聚合”讲出架构深度。<span class="tag">[文档]</span> 公开文档（2026-10 阅读，API 名随版本变化，以概念为准） <span class="tag">[代码]</span> 本仓库源码 <span class="tag">[推断]</span> 我的判断</p>
+
+<div class="elev"><b>60 秒电梯版（开场就说这段）</b><br>
+“LangGraph 是个<b>低层编排 runtime</b>：把 agent 表达成<b>共享 State + 节点 + 边</b>，按 super-step 执行。<b>条件边</b>让它能表达 ReAct 循环；<b>reducer</b>决定并行写入怎么合并，这是多 agent 聚合的核心机制；<b>checkpointer</b>每步存档，顺带给了持久化、人工介入和 time travel；多 agent 在图里就是<b>子图或节点</b>，常见形态是 supervisor（agent 当工具）、handoff（Command 切换）和 Send 扇出扇入。但 LangGraph 不替你管<b>上下文增长</b>：裁剪、摘要、Store、子 agent 隔离都得自己设计。我做招聘 agent 时遇到的正是这几类取舍：state 怎么设计、谁负责终止、失败怎么隔离、成本怎么控。”</div>
+
+<h2>三条贯穿全程的不变量</h2>
+<div class="inv">
+<div><p><b>① State 是契约</b><br>节点之间只通过共享 state 通信，schema 与 reducer 决定了谁能写、怎么合并。</p></div>
+<div><p><b>② 每步可存档，节点要幂等</b><br>checkpoint 在 super-step 边界，恢复会重跑节点，副作用必须能重复执行。</p></div>
+<div><p><b>③ 聚合与终止有明确归属</b><br>并行结果由 reducer 或汇总节点收口，循环由条件边或上限收口，不能“谁都可以结束”。</p></div>
+</div>
+
+<h2>演进图（随步骤逐步长出来）</h2>
+<div class="nav" id="nav"></div>
+<figure><div class="scrollx">
+<svg viewBox="0 0 760 340" width="760" role="img" aria-label="LangGraph 随步骤逐步增加状态、条件边、reducer、checkpointer、interrupt、流式、子图、扇出和上下文管理">
+<defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs>
+<g marker-end="url(#ar)">
+<path class="ln" data-s="0" d="M228 168 H254"/>
+<path class="ln" data-s="0" d="M302 140 V104 H204 V140"/>
+<path class="ln" data-s="2" d="M156 140 V76 H668 V140"/>
+<path class="ln" data-s="3" d="M58 270 V196"/>
+<path class="ln" data-s="4" d="M302 196 V270"/>
+<path class="ln dash" data-s="5" d="M498 296 H470"/>
+<path class="ln dash" data-s="6" d="M668 270 V196"/>
+<path class="ln" data-s="7" d="M350 168 H376"/>
+<path class="ln" data-s="8" d="M472 168 H498"/>
+<path class="ln" data-s="8" d="M594 168 H620"/>
+<path class="ln" data-s="9" d="M58 54 V140"/>
+</g>
+<text class="lbl" data-s="0" x="212" y="98">循环</text>
+<text class="lbl" data-s="2" x="250" y="70">无 tool call 则 END</text>
+<text class="lbl" data-s="4" x="308" y="238">每 super-step 存档</text>
+<text class="lbl" data-s="6" x="676" y="236">事件</text>
+<g class="bx" data-s="0" data-h="1"><rect x="10" y="140" width="96" height="56" rx="8"/><text class="t" x="20" y="162">while 循环</text><text x="20" y="182">手写</text></g>
+<g class="bx" data-s="1"><rect x="10" y="140" width="96" height="56" rx="8"/><text class="t" x="20" y="162">State</text><text x="20" y="182">共享状态</text></g>
+<g class="bx" data-s="0"><rect x="132" y="140" width="96" height="56" rx="8"/><text class="t" x="142" y="162">模型节点</text><text x="142" y="182">产出调用</text></g>
+<g class="bx" data-s="0"><rect x="254" y="140" width="96" height="56" rx="8"/><text class="t" x="264" y="162">工具节点</text><text x="264" y="182">执行调用</text></g>
+<g class="bx" data-s="7"><rect x="376" y="140" width="96" height="56" rx="8"/><text class="t" x="386" y="162">子图</text><text x="386" y="182">子 agent</text></g>
+<g class="bx" data-s="8"><rect x="498" y="140" width="96" height="56" rx="8"/><text class="t" x="508" y="162">Send 扇出</text><text x="508" y="182">并行 worker</text></g>
+<g class="bx" data-s="2"><rect x="620" y="140" width="96" height="56" rx="8"/><text class="t" x="630" y="162">END</text><text x="630" y="182">汇总输出</text></g>
+<g class="bx" data-s="3"><rect x="10" y="270" width="216" height="52" rx="8"/><text class="t" x="20" y="292">Reducer</text><text x="20" y="310">并行写入怎么合并</text></g>
+<g class="bx" data-s="4"><rect x="254" y="270" width="216" height="52" rx="8"/><text class="t" x="264" y="292">Checkpointer</text><text x="264" y="310">thread · checkpoint</text></g>
+<g class="bx" data-s="5"><rect x="498" y="270" width="96" height="52" rx="8"/><text class="t" x="508" y="292">interrupt</text><text x="508" y="310">人工介入</text></g>
+<g class="bx" data-s="6"><rect x="620" y="270" width="96" height="52" rx="8"/><text class="t" x="630" y="292">stream</text><text x="630" y="310">trace</text></g>
+<g class="bx" data-s="9"><rect x="10" y="10" width="216" height="44" rx="8"/><text class="t" x="20" y="30">上下文管理</text><text x="20" y="46">trim · 摘要 · Store</text></g>
+</svg></div>
+<figcaption id="cap"></figcaption></figure>
+
+<div class="nav" style="position:static;border:0;padding:0"><button id="prev">← 上一步</button><button id="next">下一步 →</button><span class="sp"></span><button id="allb" aria-pressed="false">全文连读</button></div>
+<div id="steps">
+
+<section class="step" data-s="0"><h2>L0 · 朴素循环：手写 while</h2>
+<div class="say"><span class="k">怎么说：</span>最朴素的 agent 就是一个 while 循环：调模型，有 tool call 就执行，把结果追加进 messages，再调模型，直到没有 tool call。它能跑，但状态全在局部变量里，所以<b>进程一挂就丢</b>，想暂停等人批准要自己写，想让多个角色协作要自己拼。LangGraph 的价值就是把这些“工程问题”显式化。</div>
+<div class="row"><h3>这个朴素版的洞</h3><ul><li>状态散落在变量里，没有统一 schema → L1</li><li>循环出口、分支靠 if/else，难以复用和观察 → L2</li><li>多个分支同时写同一份数据怎么办 → L3</li><li>崩溃、重启后怎么继续 → L4</li><li>要等人批准怎么办 → L5</li><li>过程不可见 → L6</li><li>多个 agent 怎么组合、结果怎么汇总 → L7/L8</li><li>messages 越滚越大 → L9</li></ul></div>
+<div class="cmp"><div><b>pi</b>loop 内置在 runtime 里，是一个具体的 coding agent 循环，不提供显式工作流层。<span class="tag">[推断]</span></div><div><b>LangGraph</b>官方定位是“runtime”：负责持久执行、流式、人工介入、线程级与跨线程持久化；LangChain 是其上的框架，Deep Agents 是更上层的 harness。<span class="tag">[文档]</span></div></div>
+<div class="bridge"><span class="k">过渡句：</span>“第一件事是把散落的状态收拢成一个有 schema 的对象，这就是图的 State。”</div>
+</section>
+
+<section class="step" data-s="1"><h2>L1 · 状态图：State、节点、边</h2>
+<div class="row"><h3>痛点</h3><p>循环里的状态没有边界，谁读谁写不清楚，也没法检查流程结构。</p><h3>补丁</h3><ul><li><b>State</b>：一份共享快照，用 TypedDict、dataclass 或 Pydantic 定义，可设输入、输出 schema 和私有通道。</li><li><b>节点</b>是函数：读 state，返回更新；<b>边</b>决定下一个节点。</li><li><b>编译</b>：<code>StateGraph</code> 必须 compile，编译时检查结构，并接收 checkpointer、断点等运行时选项。</li><li><b>super-step 执行</b>（受 Pregel 启发）：同一 super-step 内的节点并行；所有节点不活跃且没有在途消息时结束。</li></ul><span class="tag">[文档]</span></div>
+<div class="say"><span class="k">怎么说：</span>我会强调两点。第一，<b>节点不互相调用，只通过 state 通信</b>，所以 state schema 就是整个系统的接口契约。第二，<b>执行是 super-step 粒度</b>，后面的存档、并行、恢复都挂在这个粒度上。代价是：任何新字段都要想清楚由谁写、怎么合并。</div>
+<div class="cmp"><div><b>LangGraph</b>显式的 state schema + 编译期结构检查，工作流路径可枚举时很合适。<span class="tag">[文档]</span></div><div><b>pi / codex</b>状态就是会话 history，没有可声明的自定义 state schema。<span class="tag">[推断]</span></div><div><b>本项目</b>代理不拥有对话，会话状态按 session 持久化，由 id 与对账维护一致，不是图 state。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：什么时候用图，什么时候自己写 loop？</summary><p>判据是<b>路径能否预先枚举</b>。流程固定（解析、匹配、安排）用图，收益是可观察、可暂停、可测试；路径由模型即兴决定的开放任务，图里放一个 ReAct 子循环即可。LangGraph 文档自己也区分：workflow 走预定代码路径，agent 自己决定流程。<span class="tag">[文档]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“有了节点和边，下一步是让它能表达循环和分支，这就是条件边。”</div>
+</section>
+
+<section class="step" data-s="2"><h2>L2 · 条件边：ReAct 循环与终止</h2>
+<div class="row"><h3>痛点</h3><p>固定边只能表达线性流程；agent 需要“有工具调用就去执行，否则结束”的分支，并且必须有人负责防止死循环。</p><h3>补丁</h3><ul><li><b>条件边</b>（<code>add_conditional_edges</code>）：由函数返回值决定下一个节点；入口也可以是条件的。</li><li><b>Command</b>：节点可同时返回 <code>update</code> 和 <code>goto</code>，把“改状态”和“选路由”合在一个返回里；文档建议每个节点用静态边或动态路由其一，静态边仍会与 <code>goto</code> 并行触发。</li><li><b>终止</b>：无 tool call 走向 END；兜底是 <b>recursion limit</b>，限制单次运行的 super-step 数，文档写明默认 1000（自 1.0.6 起），超出抛 <code>GraphRecursionError</code>；可用 <code>RemainingSteps</code> 提前改道。</li><li><b>预置 agent</b>：LangChain 的 <code>create_agent</code> 就是模型调工具直到完成的循环，限流、重试、摘要都用 middleware 挂上。</li></ul><span class="tag">[文档]</span></div>
+<div class="say"><span class="k">怎么说：</span>ReAct 图本质上只有两个节点加一条条件边。我会主动讲<b>终止归属</b>：正常出口是模型不再调工具，异常出口是 recursion limit 和 middleware 里的模型/工具调用次数上限（<code>exit_behavior</code> 可以是继续、报错或结束）。常见误解是 recursion limit 默认 25，文档现行写法是 1000，所以“防死循环”不能只靠它，要有语义级的上限。</div>
+<div class="cmp"><div><b>LangGraph</b>终止 = 条件边 + recursion limit + 调用次数 middleware；多个节点可各自重试。<span class="tag">[文档]</span></div><div><b>pi</b>内层循环：模型无工具调用即停；外层处理 steering 与 follow-up 消息。<span class="tag">[代码]</span></div><div><b>codex</b>回合循环由 turn 控制，结合审批策略与压缩触发。<span class="tag">[推断]</span></div></div>
+<details><summary>追问：多 agent 里“谁来决定结束”？</summary><p>必须唯一。supervisor 模式由 supervisor 的条件边或它不再调用 worker 来结束；swarm 模式没有中心，要靠 active agent 自己产出最终回答，需要外加步数上限。我会在状态里放显式的 <code>done</code> 或最终结果字段，让汇总节点是唯一通往 END 的路径。<span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“循环有了，但一旦两个分支同时写同一个 key，就需要规则，这就是 reducer。”</div>
+</section>
+
+<section class="step" data-s="3"><h2>L3 · Reducer：并行写入的合并规则</h2>
+<div class="row"><h3>痛点</h3><p>并行节点或多个 agent 同时更新同一个 state key，图不知道该保留谁的值；messages 这类列表也不能每次整体覆盖。</p><h3>补丁</h3><ul><li><b>每个 key 一个 reducer</b>：拿到当前值（left）和节点更新（right）合成新值；默认 reducer 是<b>覆盖</b>。</li><li><code>operator.add</code> 追加列表；<code>add_messages</code> 按消息 ID 合并（同 ID 更新，新 ID 追加）；<code>MessagesState</code> 是预置的 messages 状态。</li><li>同一 super-step 里多个节点写同一 key 且<b>没有 reducer</b>，会抛并发更新错误（<code>INVALID_CONCURRENT_GRAPH_UPDATE</code>）。</li><li>文档<b>没有承诺并行写入的先后顺序</b>，所以 reducer 最好满足交换律，或者带来源标记。</li><li><code>Overwrite</code> 可绕过 reducer；<code>UntrackedValue</code> 不进 checkpoint。</li></ul><span class="tag">[文档]</span></div>
+<div class="say"><span class="k">怎么说：</span>多 agent 聚合在 LangGraph 里最底层的机制就是 reducer。我设计时会让每个 agent <b>写自己的 key 或带 agent 标识的条目</b>，共享 key 用追加型 reducer，避免“最后写入者胜出”这种静默覆盖。代价是 state 会膨胀，所以聚合后要有汇总节点把它压成下游需要的最小形式。</div>
+<div class="cmp"><div><b>LangGraph</b>reducer 由 schema 声明，冲突在编译与运行期暴露，而不是静默覆盖。<span class="tag">[文档]</span></div><div><b>本项目</b>消息 id 与引用号永不复用，是另一种“合并正确性”：内容 hash 标识消息，对账失败宁可不折叠。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：reducer 冲突怎么排查？</summary><p>先看是否有两个并行节点写同一 key；再看是否把“覆盖语义”误用在列表上；最后看 messages 是否因 ID 缺失而重复追加。我会在 state 里保留每个 agent 的原始输出（带 agent 名），汇总节点再做去重和打分。<span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“state 的合并有规则了，但进程一挂 state 还是没了——需要持久化。”</div>
+</section>
+
+<section class="step" data-s="4"><h2>L4 · 持久化：checkpointer 与线程</h2>
+<div class="row"><h3>痛点</h3><p>进程崩溃、部署重启，整个执行丢失；也没法回看“当时 state 是什么样”。</p><h3>补丁</h3><ul><li><b>checkpointer</b> 把一个 thread 的状态按 super-step 存成 checkpoint，用 <code>thread_id</code> 区分会话；快照里有 values、next、metadata、tasks 等。</li><li><b>后端</b>：InMemorySaver 重启即丢；Sqlite 适合开发；Postgres 适合生产；可选加密序列化。</li><li><b>pending writes</b>：某个 super-step 中途失败时，同一步已成功节点的输出会保留，恢复时不重跑。</li><li><b>durability 模式</b>：<code>exit</code>、<code>async</code>、<code>sync</code>，在性能与崩溃恢复之间权衡；文档未在我读到的页面里写默认值。</li><li><b>time travel</b>：<code>get_state_history</code> 找历史 checkpoint；replay 从某点重跑（点之后的节点会重新调用 LLM）；fork 用 <code>update_state</code> 在旧点上开新分支，原历史不动。</li><li>checkpoint 会累积，长会话需要清理；Postgres 的 thread_id 需小于 255 字符。</li></ul><span class="tag">[文档]</span></div>
+<div class="say"><span class="k">怎么说：</span>checkpoint 的粒度是 super-step，不是每次工具调用，这有个直接后果：<b>恢复会重跑当前未完成的节点</b>，所以节点里有副作用（发邮件、写库）必须幂等，或者拆成单独节点、用 task 包起来。另外 checkpoint 是线程级短期记忆，跨会话的长期信息要放 Store（L9）。</div>
+<div class="cmp"><div><b>LangGraph</b>通用 checkpoint：存的是图 state，能回放、分叉、人工改。<span class="tag">[文档]</span></div><div><b>pi / codex</b>持久化的是会话记录与摘要，用于恢复和展示，而不是“可分叉的状态快照”。<span class="tag">[推断]</span></div><div><b>本项目</b>按 session 持久化原文、摘要块和对账状态，目标是压缩视图可回溯，而不是流程恢复。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：time travel 的坑？</summary><p>replay 会重新执行点之后的节点，包括 LLM 调用和 API 请求，结果可能不同；interrupt 在 time travel 时总会再次触发；默认继承 checkpointer 的子图在父图看来是一步，想在子图内部分叉需要给子图开独立的 checkpointer。<span class="tag">[文档]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“能存档就能暂停，暂停等人批准就是 interrupt。”</div>
+</section>
+
+<section class="step" data-s="5"><h2>L5 · 人工介入与容错：interrupt、重试、兜底</h2>
+<div class="row"><h3>痛点</h3><p>高风险动作需要人批准；外部调用会失败；失败后不能让整个流程重来。</p><h3>补丁</h3><ul><li><b>interrupt</b>：节点内调用 <code>interrupt(value)</code> 暂停，用 <code>Command(resume=...)</code> 恢复，必须同一个 <code>thread_id</code> 且有 checkpointer。</li><li><b>恢复会从节点开头重跑</b>，不是从 interrupt 那一行继续；因此 interrupt 之前的副作用要幂等，不要用裸 try/except 吞掉它，也不要在一个节点里 while 循环多次 interrupt。</li><li>并行分支同时 interrupt，用 <code>Command(resume={interrupt_id: value})</code> 一次性恢复。</li><li><b>静态断点</b> <code>interrupt_before/after</code> 用于调试，HITL 推荐 interrupt。</li><li><b>RetryPolicy</b>：默认最多 3 次尝试、指数退避加抖动，不重试 ValueError 等；<b>timeout</b> 仅支持 async 节点；<b>error_handler</b> 在重试用尽后可返回 <code>Command</code> 改道。</li><li><b>HITL middleware</b>：按工具配置 approve/edit/reject/respond。</li></ul><span class="tag">[文档]</span></div>
+<div class="say"><span class="k">怎么说：</span>HITL 的难点不是 API，而是<b>幂等和审批粒度</b>。节点重跑意味着“审批前先创建记录”这种写法会产生重复，我会把副作用放到 interrupt 之后或独立节点里。审批粒度上，按工具和参数（<code>when</code> 条件）分级，低风险直接过，高风险才暂停。</div>
+<div class="cmp"><div><b>LangGraph</b>“暂停整个图”，状态在 checkpoint 里，可以隔很久再恢复。<span class="tag">[文档]</span></div><div><b>pi</b>在工具执行前的钩子里阻止或改写，并支持在批次间注入 steering 消息。<span class="tag">[代码]</span></div><div><b>codex</b>审批策略 + 沙箱决定哪些命令要问人。<span class="tag">[推断]</span></div></div>
+<details><summary>追问：HITL 恢复后为什么发了两封邮件？</summary><p>典型原因：发送动作写在 interrupt 之前或同节点里，恢复时节点重跑。修法是把发送拆成 interrupt 之后的独立节点，并用幂等键（如业务 id）去重。<span class="tag">[文档]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“能暂停能恢复之后，下一个问题是怎么看清它在干什么。”</div>
+</section>
+
+<section class="step" data-s="6"><h2>L6 · 流式与可观测：stream 模式与 trace</h2>
+<div class="row"><h3>痛点</h3><p>长流程对用户是黑盒；排查“哪个节点慢、哪个 agent 花了钱”缺少抓手。</p><h3>补丁</h3><ul><li><b>stream 模式</b>：<code>values</code>（每步完整 state）、<code>updates</code>（每个节点的增量）、<code>messages</code>（LLM token 流，带 <code>langgraph_node</code> 元数据）、<code>custom</code>（节点里自己发事件）、<code>checkpoints</code>、<code>tasks</code>、<code>debug</code>。</li><li><b>子图</b>：流式要开 <code>subgraphs=True</code>，事件带命名空间，否则内层 token 不会冒泡到父图。</li><li><b>LangSmith</b>：trace 树记录每步，自动统计 token 与成本；评估分离线（带参考答案）与在线（生产流量）；轨迹评估比较实际步骤序列与期望序列。</li></ul><span class="tag">[文档]</span></div>
+<div class="say"><span class="k">怎么说：</span>多 agent 场景下可观测的关键是<b>能按 agent 切分</b>：每个 agent 一个节点或子图，metadata 带 agent 名，这样 trace 里能直接回答“哪个 agent 贡献了多少 token、哪个环节失败”。轨迹评估只比对工具名会忽略参数，所以要么加 LLM-as-judge，要么比对参数。</div>
+<div class="cmp"><div><b>LangGraph</b>stream 模式 + LangSmith trace，节点天然是观测边界。<span class="tag">[文档]</span></div><div><b>本项目</b>代理层统一走 tee logger，记录压缩前后 token、对账结果和回退次数，关注点在成本与上下文，不是流程。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：怎么评估一个多 agent 系统？</summary><p>分三层：单 agent 的输出质量、整条轨迹是否合理（步骤、工具、顺序）、端到端成功率与成本。离线用固定数据集回归，线上用抽样评估，把线上失败回灌成离线用例。<span class="tag">[文档]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“单图能看清了，现在把整张图当积木：子图和多 agent。”</div>
+</section>
+
+<section class="step" data-s="7"><h2>L7 · 子图与多 agent：谁调谁、谁共享什么</h2>
+<div class="row"><h3>痛点</h3><p>一个 agent 的 prompt 和工具越堆越多，职责混乱；不同团队想独立开发各自的 agent；各 agent 需要不同的上下文。</p><h3>补丁</h3><ul><li><b>子图</b>：编译好的图当作另一个图的节点。两种接法：<b>在节点里调用</b>（父子 schema 不同，自己做映射）；<b>直接作为节点</b>（共享 state key，无需包装）。</li><li><b>checkpointer 三档</b>：默认 per-invocation（每次调用新开，仍可 interrupt）；<code>True</code> per-thread（跨调用累积，同一个子图并行调用会冲突）；<code>False</code> 无 checkpoint（不可 interrupt，崩溃无法恢复）。</li><li><b>文档里的四种多 agent 形态</b>：Subagents（主 agent 把子 agent 当工具，路由集中，子 agent 无状态，上下文隔离强）；Handoffs（工具更新状态变量或 <code>Command</code> 切换当前 agent，有状态，适合直接与用户多轮交互）；Skills（一个 agent 按需加载专门提示）；Router（分类后分发并汇总，适合并行）。另有 Custom workflow（用 LangGraph 自己编排）。</li><li><b>supervisor 库</b> <code>langgraph-supervisor</code>：<code>output_mode</code> 可选 full_history 或 last_message；维护者现在推荐大多数场景<b>直接用工具实现 supervisor</b>，理由是对上下文工程控制更多。<b>swarm</b> 库维护 <code>active_agent</code>，多轮对话必须配 checkpointer，否则会忘掉当前 agent。</li></ul><span class="tag">[文档]</span></div>
+<div class="say"><span class="k">怎么说：</span>我选形态的判据是<b>上下文该不该共享</b>。子 agent 当工具：只把任务描述给它，只拿最终消息回来，主 agent 上下文干净，但每次调用多一次模型往返；handoff：同一段对话由不同 agent 接力，上下文连续、省调用，但串行、不能并行。文档的示例对比也印证这点：重复请求时有状态的形态省调用，多领域并行时 subagents 和 router 更省 token（那是文档给定场景的数字，不是普适基准）。实现 handoff 还有个硬约束：更新 messages 的 handoff 工具必须返回配对的 <code>ToolMessage</code>，否则历史不合法。</div>
+<div class="cmp"><div><b>LangGraph</b>子图 / handoff / supervisor 是图里的组合方式，边界由 state schema 和 checkpointer 档位决定。<span class="tag">[文档]</span></div><div><b>pi</b>有 pi-subagents，把子 agent 做成 <code>acp_delegate</code> 类工具，属于“agent 当工具”。<span class="tag">[代码]</span></div><div><b>codex</b>子 agent 作为独立会话；结果以消息回传。<span class="tag">[推断]</span></div><div><b>本项目</b>仓库内 <code>pi-subagents/</code> 是同类组件；代理层对子 agent 会话做独立 session 管理（命名空间 <code>sub:</code>）。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：为什么官方不再推荐直接用 supervisor 库？</summary><p>公开说法是：用工具直接实现，对 <b>context engineering 控制更多</b>。我的理解：库的默认会把消息历史整体转交，而你往往想精确决定每个 worker 看到什么、返回什么。这也是我的设计原则，先想清上下文流，再选框架。<span class="tag">[文档]</span> <span class="tag">[推断]</span></p></details>
+<details><summary>追问：并行调用同一个 per-thread 子图会怎样？</summary><p>文档指出同一 per-thread 子图在同一节点内并行多次调用会造成 checkpoint 冲突，建议限制并行度；per-invocation 子图每次有独立命名空间，适合并行。<span class="tag">[文档]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“要让多个 agent 同时干活再聚合，就是扇出扇入：Send 加 reducer。”</div>
+</section>
+
+<section class="step" data-s="8"><h2>L8 · 扇出扇入：Send、map-reduce 与聚合</h2>
+<div class="row"><h3>痛点</h3><p>分支数量运行时才知道（比如 N 份简历、N 位候选人）；静态边无法表达；聚合要有人负责。</p><h3>补丁</h3><ul><li><b>Send API</b>：条件边可返回多个 <code>Send(目标节点, 各自的输入)</code>，运行时动态创建 worker，各自带独立 state。</li><li><b>扇入</b>：worker 的输出写进共享 key，由该 key 的 reducer 追加；之后一个<b>汇总节点</b>（聚合 agent 或确定性函数）读取并输出。这就是 orchestrator-worker 模式。</li><li>每个 worker 的 super-step 是并行的；任一 worker 失败，同一步已成功的写入作为 pending writes 保留。</li><li>文档的并行化模式还包括“同一任务跑多次取共识”，用于提高置信度。</li></ul><span class="tag">[文档]</span></div>
+<div class="say"><span class="k">怎么说：</span>聚合有三个设计决定：<b>谁写</b>（worker 只写自己的槽位）、<b>怎么合</b>（reducer 追加，保留来源）、<b>谁拍板</b>（汇总节点做去重、打分、冲突裁决，并作为唯一通向 END 的路径）。取舍：并行提速，但<b>成本按分支数线性放大</b>，所以要有最大并发和预算上限，并考虑部分失败时的降级输出。</div>
+<div class="cmp"><div><b>LangGraph</b>Send + reducer 是官方的 map-reduce 路径；规模大时 state 里的聚合列表会膨胀。<span class="tag">[文档]</span></div><div><b>pi</b>多个工具调用可在批次内并行执行，聚合由模型在下一轮读取结果完成。<span class="tag">[推断]</span></div><div><b>本项目</b>不参与编排；但对并行子任务产生的大输出，前置治理（CCR 一次替换）可降低聚合时的上下文压力。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：某个 worker 失败了，汇总怎么办？</summary><p>先区分可重试（节点 RetryPolicy）与不可重试；用 error_handler 把失败写成“失败条目”进入共享 key，汇总节点据此输出降级结果并标注缺失，而不是让整图失败。<span class="tag">[文档]</span> <span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“并行放大的不只是成本，还有上下文——最后一块是上下文管理。”</div>
+</section>
+
+<section class="step" data-s="9"><h2>L9 · 上下文管理：裁剪、摘要、Store 与隔离</h2>
+<div class="row"><h3>痛点</h3><p>LangGraph 的 state 里 <code>messages</code> 只增不减，多 agent 共享历史时膨胀更快；图本身不压缩。</p><h3>补丁（文档提供的工具箱）</h3><ul><li><b>裁剪 / 删除</b>：<code>before_model</code> middleware 发出 <code>RemoveMessage</code> 重写列表；裁剪后必须保持 provider 合法（tool call 后跟 tool result，部分 provider 要求以 user 开头）。</li><li><b>摘要</b>：<code>SummarizationMiddleware</code> 配 <code>trigger</code>（tokens / fraction / messages）和 <code>keep</code>（默认保留最近 20 条消息），旧消息被<b>永久替换</b>为摘要。</li><li><b>清理工具输出</b>：context editing 把旧工具结果替换成占位符（默认触发 10 万 token、保留最近 3 个）。</li><li><b>Deep Agents</b>：大于 2 万 token 的工具输入输出落到文件系统，只留路径和前 10 行；占用达模型窗口 85% 时摘要并保留约 10% 近期内容，同时把原始消息记录存到文件系统。</li><li><b>长期记忆</b>：Store，按 namespace 加 key 存 JSON，可选语义检索，跨 thread；生产用 Postgres 等后端。</li><li><b>隔离</b>：子 agent 在干净上下文里工作，只回传最终消息；用 handoff 子图时文档示例只传触发的 AIMessage 和确认的 ToolMessage。</li></ul><span class="tag">[文档]</span></div>
+<div class="say"><span class="k">怎么说：</span>这里是我把前几章接回来的地方。LangGraph 给了<b>裁剪、摘要、落盘、隔离</b>这套积木，但默认摘要是<b>有损且替换原文</b>，没有“按引用取回”这一层（Deep Agents 的落盘记录是另一种补救）。多 agent 里最容易爆的是<b>共享 messages</b>：每个 agent 的中间推理都进了公共历史。我的原则是：<b>私有草稿区、共享结果区</b>，agent 之间交接的是摘要或结构化结果，不是全文。</div>
+<div class="cmp"><div><b>LangGraph</b>摘要与裁剪是 middleware 级、阈值型；摘要会永久替换原文；Deep Agents 另加落盘与 85% 阈值。<span class="tag">[文档]</span></div><div><b>pi</b>超过 <code>窗口 − reserveTokens</code> 触发压缩，保留近期约 2 万 token。<span class="tag">[代码]</span></div><div><b>codex</b>回合前预检与回合中滚动触发压缩，也属阈值型。<span class="tag">[代码]</span></div><div><b>本项目</b>增长驱动（50K 步长）、模型自己写摘要、折叠可回溯、分层 T1/T2/T3；缓存稳定是设计目标之一。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：LangGraph 摘要对 prompt cache 友好吗？</summary><p>摘要会重写历史前缀，触发时之后的缓存失效；文档里没有把缓存稳定作为摘要的设计目标（Anthropic 的 prompt caching 作为 provider 专属 middleware 存在，细节我没读到）。所以高频触发会有成本，要权衡 <code>trigger</code> 与 <code>keep</code>。这正是第 3、6 章讲的前缀稳定问题。<span class="tag">[推断]</span></p></details>
+<details><summary>追问：Store 里的多租户怎么隔离？</summary><p>namespace 里放用户 id，运行时通过 <code>context_schema</code> 传入；开源库本身不做鉴权，托管的 Agent Server 才有自定义 auth 与 store 的 <code>@auth.on.store()</code> 处理。开源场景下隔离靠你自己的 namespace 纪律。<span class="tag">[文档]</span> <span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“工具箱说完了，最后把它们和前 7 章对应起来，并给出你的招聘系统怎么讲。”</div>
+</section>
+
+<section class="step" data-s="10"><h2>L10 · 映射与模板：LangGraph 对照前 7 章，讲你的招聘多 agent</h2>
+<div class="row"><h3>LangGraph 概念 ↔ 第 1–7 章</h3>
+<div class="scrollt"><table>
+<tr><th>章</th><th>主题</th><th>LangGraph 对应</th><th>本仓库 / pi / codex 对应</th></tr>
+<tr><td>1</td><td>Agent loop、终止、重试、中断</td><td>ReAct 子图、条件边、recursion limit、RetryPolicy、interrupt</td><td>pi 内外两层循环、codex 回合；本项目不拥有 loop</td></tr>
+<tr><td>2</td><td>工具与权限</td><td>ToolNode、tool error / retry、HITL middleware、调用次数上限</td><td>pi 的 beforeToolCall、codex 审批与沙箱</td></tr>
+<tr><td>3</td><td>上下文压缩</td><td>裁剪、SummarizationMiddleware、context editing、Deep Agents 落盘</td><td>增长驱动折叠、可回溯、分层、兜底阶梯</td></tr>
+<tr><td>4</td><td>记忆、持久化、恢复</td><td>checkpointer（线程）、Store（跨线程）、time travel</td><td>会话记录、块存储、对账</td></tr>
+<tr><td>5</td><td>评估</td><td>LangSmith 离线/在线评估、轨迹评估、debug stream</td><td>e2e 回归、A/B、回读测试</td></tr>
+<tr><td>6</td><td>成本与缓存</td><td>LangSmith 成本统计、模型/工具调用上限、节点 cache</td><td>前缀稳定、cache 命中占比</td></tr>
+<tr><td>7</td><td>安全与多租户</td><td>thread / namespace 纪律；托管 Agent Server 的 auth 与 store 授权；可选 checkpoint 加密</td><td>session 隔离、凭据不入日志</td></tr>
+</table></div><span class="tag">[文档]</span> LangGraph 列；其余列为前几章内容。第 2 章“权限沙箱”在 LangGraph 核心里没有对应物，属于 <span class="tag">[推断]</span>（我没在文档中看到）。</div>
+
+<div class="row"><h3>面试模板：招聘多 agent 系统（括号内为占位符，替换成你的真实实现）</h3>
+<p>提醒：以下只是“怎么讲”的骨架，具体事实以你自己系统为准，没做过的不要说。</p>
+<ol><li><b>目标与为什么用多 agent</b>：〔业务目标，如缩短从简历到初筛的时间〕；拆成多个 agent 的理由是〔职责不同 / 上下文不同 / 可并行 / 独立迭代〕，而不是“看起来高级”。</li><li><b>角色与 state</b>：〔简历解析 agent〕写〔结构化候选人档案 key〕；〔匹配 agent〕读档案和岗位，写〔匹配结果 key〕；〔面试官 agent〕写〔面试问题 / 记录 key〕；〔评估汇总 agent〕读前面的结果，写〔最终评估〕。强调每个 key 的写入方是谁。</li><li><b>编排形态</b>：〔supervisor / 固定边 / Send 扇出 / handoff〕，选它的原因是〔路径是否固定、是否需要并行、是否要直接与人对话〕。</li><li><b>聚合方式</b>：〔哪些 key 用追加 reducer，哪些由汇总 agent 读取〕；冲突时〔以哪个来源为准 / 人工裁决〕。</li><li><b>终止与兜底</b>：谁宣布结束〔汇总节点 / supervisor〕；上限〔步数 / 调用次数 / 预算〕；超限时〔降级输出还是报错〕。</li><li><b>失败与恢复</b>：〔checkpointer 后端〕；哪些节点有副作用〔发通知、写库〕以及怎么做幂等；人工审批点〔哪一步〕。</li><li><b>上下文与成本</b>：agent 之间传〔全文 / 摘要 / 结构化结果〕；成本监控方式〔LangSmith 或自建〕。</li><li><b>如果重做</b>：〔你真实觉得最该改的一点〕，例如隔离私有草稿、给汇总加评测。</li></ol></div>
+
+<div class="row"><h3>面试官会追问的取舍问题（逐条准备）</h3><ul>
+<li><b>State schema 设计</b>：为什么不让每个 agent 各自维护私有 state，只通过结构化结果交接？共享 messages 与私有字段怎么分？</li>
+<li><b>Reducer 冲突</b>：两个 agent 同时写同一个 key 时发生过什么？怎么保证合并结果与顺序无关？</li>
+<li><b>终止归属</b>：谁能结束整个流程？子 agent 想结束但 supervisor 不同意怎么办？</li>
+<li><b>失败隔离</b>：一个 agent 超时或报错，其他结果是否保留？汇总怎么标注缺失？</li>
+<li><b>成本爆炸</b>：扇出 N 路、每路再带工具循环，成本上限怎么设？有没有实测过每个 agent 的 token 占比？</li>
+<li><b>上下文共享</b>：下游 agent 为什么需要上游的全文？能否只传摘要？摘要写差了怎么发现？</li>
+<li><b>可观测</b>：怎么定位“是哪个 agent 导致最终结论错了”？有没有轨迹评估？</li>
+<li><b>幂等恢复</b>：人工审批后恢复会重跑节点，哪些副作用会重复？怎么去重？</li>
+<li><b>一致性</b>：同一候选人并发触发两次流程会怎样？thread_id 怎么设计？</li>
+</ul></div>
+
+<div class="row"><h3>与“压缩代理”项目的自然衔接</h3><p>可以这样收尾：“用 LangGraph 做完多 agent 之后，我发现编排层解决了流程与恢复，却没解决长任务的上下文增长与缓存成本，所以我去研究 pi、codex 和一个做上下文压缩的代理项目。”这句话把你的真实经验和前 7 章接在一起。</p></div>
+<div class="say"><span class="k">怎么说：</span>总结时回到三条不变量：<b>state 是契约、每步可存档且节点幂等、聚合与终止有明确归属</b>。然后说一句边界：LangGraph 是编排 runtime，不是上下文压缩器，也不是安全边界；这两件事要在它之外或之上补。</div>
+</section>
+</div>
+
+<h2>一页复习卡</h2>
+<p class="sub">点任意一行跳到对应步骤。</p>
+<div class="scrollt"><table id="tbl">
+<tr><th>步骤</th><th>痛点</th><th>补丁</th><th>新代价 → 引出</th><th>不变量</th></tr>
+<tr class="link" data-j="0"><td>L0 循环</td><td>状态散落、崩溃即丢</td><td>—</td><td>→ 收拢状态</td><td>—</td></tr>
+<tr class="link" data-j="1"><td>L1 状态图</td><td>状态无边界、结构不可检查</td><td>State + 节点 + 边 + compile，super-step 执行</td><td>要分支循环 → 条件边</td><td>①</td></tr>
+<tr class="link" data-j="2"><td>L2 条件边</td><td>线性流程、无人管终止</td><td>条件边、Command、recursion limit、调用上限</td><td>并行写入 → reducer</td><td>③</td></tr>
+<tr class="link" data-j="3"><td>L3 Reducer</td><td>并行写同一 key</td><td>每 key 一个 reducer，add_messages</td><td>进程挂了 → 持久化</td><td>①</td></tr>
+<tr class="link" data-j="4"><td>L4 持久化</td><td>崩溃丢状态</td><td>checkpointer、thread、pending writes、time travel</td><td>节点重跑 → 幂等</td><td>②</td></tr>
+<tr class="link" data-j="5"><td>L5 HITL</td><td>高风险要批准、外部会失败</td><td>interrupt、RetryPolicy、error_handler</td><td>看不清 → 流式与 trace</td><td>②</td></tr>
+<tr class="link" data-j="6"><td>L6 观测</td><td>长流程黑盒</td><td>stream 模式、LangSmith 成本与轨迹评估</td><td>要组合 → 子图</td><td>全部</td></tr>
+<tr class="link" data-j="7"><td>L7 多 agent</td><td>职责混杂、上下文冲突</td><td>子图、subagents、handoffs、router</td><td>要并行聚合 → Send</td><td>①③</td></tr>
+<tr class="link" data-j="8"><td>L8 扇出扇入</td><td>分支数运行时才知道</td><td>Send + reducer + 汇总节点</td><td>成本与上下文放大 → 管理</td><td>①③</td></tr>
+<tr class="link" data-j="9"><td>L9 上下文</td><td>messages 只增不减</td><td>裁剪、摘要、落盘、Store、隔离</td><td>→ 对照前 7 章</td><td>②</td></tr>
+<tr class="link" data-j="10"><td>L10 映射</td><td>如何讲自己的系统</td><td>对照表 + 招聘模板 + 追问清单</td><td>—</td><td>全部</td></tr>
+</table></div>
+</main>
+
+<script>
+(function(){
+var CAP=["L0：手写循环：模型节点与工具节点来回。","L1：循环被收拢成 State + 节点 + 边。","L2：加上条件边，无 tool call 则走向 END。","L3：新增 Reducer，规定并行写入如何合并。","L4：新增 Checkpointer，每个 super-step 存档。","L5：新增 interrupt，暂停等人并从 checkpoint 恢复。","L6：新增 stream 与 trace，观测每个节点。","L7：节点可以是子图，也就是子 agent。","L8：Send 动态扇出多个 worker，结果经 reducer 汇总。","L9：新增上下文管理：裁剪、摘要、Store。","L10：全貌，对照前 7 章与招聘系统模板。"];
+var cur=0,all=false;
+var steps=[].slice.call(document.querySelectorAll('.step')),N=steps.length-1,nav=document.getElementById('nav'),btns=[];
+function exitAll(){if(all){all=false;document.getElementById('steps').classList.remove('all');document.getElementById('allb').setAttribute('aria-pressed',false)}}
+for(var i=0;i<=N;i++){(function(i){var b=document.createElement('button');b.textContent='L'+i;b.onclick=function(){exitAll();set(i)};nav.appendChild(b);btns.push(b)})(i)}
+var rb=document.createElement('button');rb.textContent='↺ 重置';rb.onclick=function(){exitAll();set(0)};nav.appendChild(rb);
+var svgEls=[].slice.call(document.querySelectorAll('svg [data-s]'));
+function set(n){cur=Math.max(0,Math.min(N,n));
+steps.forEach(function(s){s.classList.toggle('on',+s.dataset.s===cur)});
+btns.forEach(function(b,i){b.setAttribute('aria-pressed',i===cur)});
+svgEls.forEach(function(e){var s=+e.dataset.s,show=all||s<=cur;
+if(e.dataset.h&&(all||cur>=+e.dataset.h))show=false;
+e.classList.toggle('vis',show);
+if(e.classList.contains('bx')||e.classList.contains('ln')){e.classList.toggle('new',!all&&s===cur&&cur>0)}});
+document.getElementById('cap').textContent=all?"全貌：把所有环节放在一起。":CAP[Math.min(cur,CAP.length-1)];
+document.getElementById('prev').disabled=cur===0;document.getElementById('next').disabled=cur===N}
+function top1(){document.getElementById('nav').scrollIntoView({behavior:'smooth',block:'start'})}
+document.getElementById('prev').onclick=function(){exitAll();set(cur-1);top1()};
+document.getElementById('next').onclick=function(){exitAll();set(cur+1);top1()};
+var ab=document.getElementById('allb');
+ab.onclick=function(){all=!all;document.getElementById('steps').classList.toggle('all',all);ab.setAttribute('aria-pressed',all);set(cur)};
+[].forEach.call(document.querySelectorAll('tr.link'),function(r){r.onclick=function(){exitAll();set(+r.dataset.j);top1()}});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'){exitAll();set(cur+1)}if(e.key==='ArrowLeft'){exitAll();set(cur-1)}if(e.key==='Escape'){exitAll();set(0)}});
+set(0);
+})();
+</script>

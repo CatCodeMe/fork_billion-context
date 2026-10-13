@@ -1,0 +1,212 @@
+<title>工具与权限演进讲法</title>
+<style>
+:root{--bg:#f6f7f4;--fg:#1d2321;--mut:#5d6965;--line:#d9ded9;--card:#fff;--acc:#0f766e;--accbg:#e1f1ee;--warn:#b45309;--warnbg:#fbeedb;--code:#eef1ee}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121715;--fg:#e6ebe8;--mut:#9aa7a2;--line:#2b3531;--card:#1a2220;--acc:#4fd1c1;--accbg:#183532;--warn:#f0b35a;--warnbg:#3a2c14;--code:#222c29;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121715;--fg:#e6ebe8;--mut:#9aa7a2;--line:#2b3531;--card:#1a2220;--acc:#4fd1c1;--accbg:#183532;--warn:#f0b35a;--warnbg:#3a2c14;--code:#222c29;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.75 "IBM Plex Sans",-apple-system,"PingFang SC",sans-serif;padding-inline:16px;padding-block:24px 64px}
+main{max-width:860px;margin:0 auto}
+h1{font:700 28px/1.2 "Bricolage Grotesque","IBM Plex Sans",sans-serif;margin:0 0 6px;text-wrap:balance}
+h2{font:700 19px/1.3 "Bricolage Grotesque","IBM Plex Sans",sans-serif;margin:30px 0 8px;text-wrap:balance}
+h3{font-size:14px;margin:16px 0 4px;color:var(--acc);letter-spacing:.02em}
+p{margin:6px 0}.sub{color:var(--mut)}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px;background:var(--code);padding:1px 5px;border-radius:4px}
+pre{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px;background:var(--code);padding:10px 12px;border-radius:8px;overflow-x:auto}
+.tag{font:600 11px "IBM Plex Mono",monospace;padding:1px 6px;border-radius:4px;background:var(--code);color:var(--mut);white-space:nowrap}
+button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:5px 11px;border-radius:8px;cursor:pointer}
+button[aria-pressed="true"]{background:var(--acc);color:var(--bg);border-color:var(--acc)}
+.elev{background:var(--accbg);border-left:4px solid var(--acc);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+.elev b{color:var(--acc)}
+.inv{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:10px 0}
+.inv>div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:2px 14px 8px;min-width:0}
+.nav{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);padding-block:8px;z-index:3;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.nav .sp{flex:1}
+figure{margin:10px 0}figcaption{color:var(--mut);font-size:13px}
+.scrollx{overflow-x:auto}svg{max-width:100%;height:auto;color:var(--fg)}
+svg [data-s]{display:none}
+svg [data-s].vis{display:inline}
+.bx rect{fill:var(--card);stroke:currentColor;stroke-width:1.2}
+.bx text{fill:currentColor;font-size:12px}
+.bx.new rect{fill:var(--accbg);stroke:var(--acc);stroke-width:2.2}
+.bx .t{font-weight:700}
+.ln{stroke:currentColor;fill:none;stroke-width:1.3}
+.ln.new{stroke:var(--acc);stroke-width:2.2}
+.lbl{font-size:11px;fill:var(--mut)}
+.dash{stroke-dasharray:5 4}
+.step{display:none}
+.step.on,.all .step{display:block}
+.step>h2{border-top:1px solid var(--line);padding-top:16px}
+.row{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px 14px 10px;margin:10px 0}
+.say{background:var(--accbg);border-left:4px solid var(--acc);padding:10px 14px;border-radius:0 8px 8px 0;margin:8px 0}
+.say .k{color:var(--acc);font-weight:700}
+.bridge{background:var(--warnbg);border-left:4px solid var(--warn);padding:10px 14px;border-radius:0 8px 8px 0;margin:10px 0}
+.bridge .k{color:var(--warn);font-weight:700}
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin:8px 0}
+.cmp>div{border:1px solid var(--line);border-radius:8px;padding:6px 12px;background:var(--card);min-width:0;font-size:14px}
+.cmp b{display:block;font-size:12px;color:var(--mut);font-family:"IBM Plex Mono",monospace}
+details{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:4px 12px;margin:6px 0}
+summary{cursor:pointer;font-weight:600}
+.scrollt{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:680px;font-size:13.5px}
+th,td{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}th{color:var(--mut)}
+tr.link{cursor:pointer}tr.link:hover td{background:var(--accbg)}
+</style>
+<main>
+<h1>工具设计、权限与沙箱：一条演进主线</h1>
+<p class="sub">同第 1 章的讲法（步骤编号用 T0–T7）：从朴素的“工具就是函数”出发，每遇到一个现实问题加一个补丁，补丁带来新代价，代价引出下一步。<span class="tag">[代码]</span> 读过源码 <span class="tag">[推断]</span> 我的判断 <span class="tag">[文档]</span> 公开行为 <span class="tag">[论文]</span> 作者自报</p>
+
+<div class="elev"><b>60 秒电梯版（开场就说这段）</b><br>
+“给模型工具，本质是把<b>不可信的决策者</b>接到<b>有副作用的执行器</b>上。我按演进顺序讲：工具先要有<b>清晰的契约</b>，不然模型传错参；输出要<b>有界</b>，不然撑爆上下文；并发要<b>防竞态</b>；然后是核心——<b>权限</b>，什么要问人、什么直接拒；光问人不够，还要<b>沙箱</b>强制最小权限，并设计好被拒后的<b>升级路径</b>；工具一多还会遇到<b>扩展与 prompt cache</b> 的冲突；最后一条底线：<b>工具结果是数据，不是指令</b>。我对 codex 和 pi 的取舍都做过对比。”</div>
+
+<h2>三条贯穿全程的原则</h2>
+<div class="inv">
+<div><p><b>① 最小权限，默认收紧</b><br>能力靠显式放行，而不是靠模型自觉。</p></div>
+<div><p><b>② 失败可见、可自愈</b><br>错误作为 result 回模型，并给可行动的提示；不静默吞掉。</p></div>
+<div><p><b>③ 任何输出都有界</b><br>工具返回、日志、diff 都必须有上限，且告诉模型怎么继续。</p></div>
+</div>
+
+<h2>演进图（随步骤逐步长出来）</h2>
+<div class="nav" id="nav"></div>
+<figure><div class="scrollx">
+<svg viewBox="0 0 760 330" width="760" role="img" aria-label="一次工具调用的流水线随步骤逐步增加校验、审批、沙箱、输出治理等环节">
+<defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs>
+<g marker-end="url(#ar)">
+<path class="ln" data-s="0" d="M106 168 H498"/>
+<path class="ln" data-s="0" data-h="2" d="M546 196 V250"/>
+<path class="ln" data-s="2" d="M594 168 H620"/>
+<path class="ln" data-s="2" d="M668 196 V250"/>
+<path class="ln" data-s="3" d="M546 114 V140"/>
+<path class="ln dash new5" data-s="5" d="M510 196 V228 H302 V196"/>
+<path class="ln" data-s="6" d="M58 74 V140"/>
+</g>
+<text class="lbl" data-s="0" x="112" y="160">tool call</text>
+<text class="lbl" data-s="5" x="318" y="222">沙箱拒绝 → 升级重试（审批已缓存，不再问）</text>
+<text class="lbl" data-s="6" x="66" y="112">tool list（稳定 = 缓存友好）</text>
+<g class="bx" data-s="0"><rect x="10" y="140" width="96" height="56" rx="8"/><text class="t" x="20" y="162">Model</text><text x="20" y="182">产出调用</text></g>
+<g class="bx" data-s="1"><rect x="132" y="140" width="96" height="56" rx="8"/><text class="t" x="142" y="162">契约校验</text><text x="142" y="182">schema·错误回传</text></g>
+<g class="bx" data-s="4"><rect x="254" y="140" width="96" height="56" rx="8"/><text class="t" x="264" y="162">审批策略</text><text x="264" y="182">Skip/问/禁止</text></g>
+<g class="bx" data-s="5"><rect x="376" y="140" width="96" height="56" rx="8"/><text class="t" x="386" y="162">沙箱选择</text><text x="386" y="182">最小权限</text></g>
+<g class="bx" data-s="0"><rect x="498" y="140" width="96" height="56" rx="8"/><text class="t" x="508" y="162">执行</text><text x="508" y="182">副作用发生处</text></g>
+<g class="bx" data-s="2"><rect x="620" y="140" width="96" height="56" rx="8"/><text class="t" x="630" y="162">输出治理</text><text x="630" y="182">截断·CCR</text></g>
+<g class="bx" data-s="3"><rect x="498" y="70" width="96" height="44" rx="8"/><text class="t" x="506" y="90">竞态与超时</text><text x="506" y="106">文件队列·kill</text></g>
+<g class="bx" data-s="6"><rect x="10" y="30" width="300" height="44" rx="8"/><text class="t" x="20" y="50">Tool Registry</text><text x="20" y="66">内置 · MCP · 插件 · hook</text></g>
+<g class="bx" data-s="0"><rect x="498" y="250" width="218" height="44" rx="8"/><text class="t" x="508" y="270">History</text><text x="508" y="286">result 追加（守配对）</text></g>
+<g data-s="7"><rect x="488" y="128" width="238" height="176" rx="10" fill="none" stroke="var(--acc)" stroke-width="2" stroke-dasharray="6 4"/><text x="494" y="320" font-size="12" fill="var(--acc)">框内全是不可信数据：result 不是指令</text></g>
+</svg></div>
+<figcaption id="cap"></figcaption></figure>
+
+<div class="nav" style="position:static;border:0;padding:0"><button id="prev">← 上一步</button><button id="next">下一步 →</button><span class="sp"></span><button id="allb" aria-pressed="false">全文连读</button></div>
+<div id="steps">
+
+<section class="step" data-s="0"><h2>T0 · 最朴素的工具：函数 + 一个万能 bash</h2>
+<pre>tools = { bash: (cmd) =&gt; exec(cmd) }
+result = tools[call.name](call.args)   // 直接执行，字符串回传</pre>
+<div class="say"><span class="k">怎么说：</span>最朴素的做法是一个万能 bash，参数原样执行、输出原样回传。它能工作，但<b>模型是不可信的决策者</b>：会传错参数、会被网页里的文字诱导、会误删东西。后面每个补丁都是在这条链上加一道闸。</div>
+<div class="row"><h3>这条链上的洞</h3><ul><li>参数错了没有反馈，模型无法自愈 → T1</li><li>输出可能几十万行 → T2</li><li>并发写同一文件、命令挂死 → T3</li><li>危险操作无人把关 → T4</li><li>把关靠“问人”不够强 → T5</li><li>工具一多、第三方接入 → T6</li><li>结果里的文字可能是攻击 → T7</li></ul></div>
+<div class="bridge"><span class="k">过渡句：</span>“先从最基础的开始：工具的契约怎么设计，才能让模型用对。”</div>
+</section>
+
+<section class="step" data-s="1"><h2>T1 · 工具契约：少而精、描述即 prompt、错误可自愈</h2>
+<div class="row"><h3>痛点</h3><p>模型传错参、选错工具、一次调用做了太多事；万能 bash 无法限权也无法审计。</p><h3>补丁</h3><ul><li><b>专用工具取代万能 bash</b>：read / write / edit / grep / find / ls / bash，各自可限权、可渲染。</li><li><b>参数少、必填清楚</b>；避免在 schema 顶层用 <code>oneOf/allOf/anyOf</code>（Anthropic 会拒绝，本项目已把它沉淀为 wire-contract 条目，#1299）。</li><li><b>工具描述就是 prompt</b>：每个工具除 schema 外，还向 system prompt 贡献使用准则。</li><li><b>校验失败当作 result 返回</b>，写清楚哪里错、怎么改。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>以 edit 为例：pi 用<b>精确文本替换</b>而不是行号——行号一旦被前面的改动挤歪就会改错位置；<code>oldText</code> 必须在文件中唯一；多处修改放进同一次调用的 <code>edits[]</code>，且<b>每处都对原文件匹配、不是增量匹配</b>，避免前一处的改动影响后一处。设计目标是让“能用对”比“用错”容易。取舍：专用工具多了，每个的定义都占 prefix token，所以工具数要克制。<span class="tag">[推断]</span></div>
+<div class="cmp"><div><b>pi</b>内置 read/write/edit/grep/find/ls/bash；每个工具带 <code>snippet</code> 与 <code>guidelines</code> 贡献到系统提示。<span class="tag">[代码]</span></div><div><b>codex</b>工具规格由 spec_plan 组装，含对第三方工具的严格校验用例（<code>spec_plan_strict_third_party_tests.rs</code>）。<span class="tag">[代码]</span></div><div><b>LangGraph</b>agent 循环让模型反复调用工具直到完成；工具异常可由中间件转成模型可见的消息，另有 tool retry（默认 2 次重试、指数退避）和 tool call limit。<span class="tag">[文档]</span></div></div>
+<details><summary>追问：为什么不干脆只给一个 bash？</summary><p>灵活但三个问题：无法按“只读/可写”分级授权；无法对 diff 做渲染和精确审批；模型要自己拼 sed/awk，出错率高。专用工具把常见操作固化为受约束的接口，bash 留作兜底。</p></details>
+<details><summary>追问：校验失败时返回什么才算“可自愈”？</summary><p>包含：哪个参数、期望什么、实际是什么、下一步建议（如 oldText 不唯一时提示加长上下文）。只回“invalid”会让模型盲目重试。</p></details>
+<div class="bridge"><span class="k">过渡句：</span>“契约对了，下一个问题是输出——工具一返回就可能是几万行。”</div>
+</section>
+
+<section class="step" data-s="2"><h2>T2 · 输出治理：任何工具输出都要有界</h2>
+<div class="row"><h3>痛点</h3><p>read 一个大文件、bash 跑出完整日志，会瞬间撑爆上下文，且这些内容大多只用一次。</p><h3>补丁</h3><ul><li><b>硬上限</b>：按行数与字节数双限。</li><li><b>head 与 tail 区分</b>：读文件看开头，跑命令看结尾（错误通常在末尾）。</li><li><b>不返回半行</b>（pi 的 tail 截断在末行超限时有例外）；首行本身超限要给明确标志。</li><li><b>告诉模型如何继续</b>（偏移量/分页/缩小范围）。</li><li>本项目更进一步：超过约 4000 token 的结果<b>到达时替换一次</b>为引用，按需 <code>acp_retrieve</code>；可结构化内容做 crush（机制见第 3 章）。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>截断是有损的，所以要回答两个问题：<b>丢哪一端</b>、<b>模型怎么拿回</b>。pi 的 <code>truncateHead / truncateTail</code> 默认 2000 行 / 50KB，一般不切半行；本项目的 CCR 走另一条路：不是丢，而是<b>换成引用并可取回</b>，且“只替换一次”，之后前缀不再变动，对 prompt cache 友好。无损优先（JSON 折叠），有损（代码裁剪、日志选择）必须 fail-open 并保留 ERROR/FAIL 行。</div>
+<div class="cmp"><div><b>pi</b><code>DEFAULT_MAX_LINES=2000</code>、<code>DEFAULT_MAX_BYTES=50KB</code>；head/tail 两套截断。<span class="tag">[代码]</span></div><div><b>本项目</b>CCR（默认 ≥4000 token 到达即替换，<code>acp_retrieve</code> 取回）、crush（json-fold 无损；code-trim/log-select 有损、fail-open）、emergency truncate 兜底（默认 95% 占用触发）。<span class="tag">[代码]</span></div><div><b>codex</b>工具输出的截断策略我没有逐行读；仓库里有 <code>compact_token_budget.rs</code>，但那属于 compaction 预算，不能当作工具输出截断的证据。<span class="tag">[推断]</span></div></div>
+<details><summary>追问：截断和 CCR 各适合什么场景？</summary><p>截断适合“看一眼就够”的场景（<code>ls</code>、读文件头）；CCR 适合“大概率只用一次但可能回头查”的大输出（构建日志、搜索结果）。后者代价是多一次取回调用，换来上下文常驻成本很小。</p></details>
+<div class="bridge"><span class="k">过渡句：</span>“输出有界了，但多个工具同时跑还会互相踩——这是并发与超时。”</div>
+</section>
+
+<section class="step" data-s="3"><h2>T3 · 并发、竞态与超时</h2>
+<div class="row"><h3>痛点</h3><p>两个 edit 同时改一个文件会互相覆盖；命令挂死永不返回；abort 后子进程还在跑。</p><h3>补丁</h3><ul><li><b>按文件串行的互斥队列</b>：以 <code>realpath</code> 为键（符号链接指向同一文件也能互斥），<b>不同文件仍然并行</b>。</li><li><b>超时有最大值</b>，非法值直接报错。</li><li><b>abort 杀整个进程树</b>，退出码约定 <code>128 + signal</code>。</li><li>读类工具可并行，写类串行（呼应第 1 章 S2）。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>pi 的 <code>withFileMutationQueue</code> 是个很干净的设计：键不是路径字符串而是<b>真实路径</b>，因为 <code>a.ts</code> 和指向它的软链是同一个文件；队列注册本身也被串行化，避免两个调用同时注册导致顺序错乱。取舍：全局大锁最简单但把不相干的写也串起来；per-file 队列粒度刚好。<span class="tag">[推断]</span></div>
+<div class="cmp"><div><b>pi</b><code>file-mutation-queue.ts</code>（按 realpath 键）；<code>bash.ts</code> 的 timeout 校验与 128+signal 退出码，进程树清理在 <code>utils/shell.ts</code>。<span class="tag">[代码]</span></div><div><b>codex</b>并行由 <code>tools/parallel.rs</code> 的 runtime 管，带取消令牌与 abort 通知；具体锁策略未逐行验证。<span class="tag">[推断]</span></div></div>
+<details><summary>追问：并行执行时，审批怎么办？</summary><p>见第 1 章 S2：审批串行在前，通过后才并发；被拒绝的调用也产出 result，保持配对。</p></details>
+<div class="bridge"><span class="k">过渡句：</span>“稳定性有了，现在进入核心问题：哪些操作该问人，哪些直接放行？”</div>
+</section>
+
+<section class="step" data-s="4"><h2>T4 · 权限：策略分级 vs 信任边界（本章核心）</h2>
+<div class="row"><h3>痛点</h3><p>删文件、联网、装依赖都是高风险；但每步都问人会产生<b>审批疲劳</b>，用户会无脑点同意，反而更不安全。</p><h3>补丁</h3><ul><li><b>三态判定</b>：Skip（直接放行）/ NeedsApproval（带原因）/ Forbidden（带原因）。</li><li><b>策略显式分级</b>：从“只信任白名单”到“从不询问”。</li><li><b>信任缓存</b>：同类操作批准一次后不再重复问。</li><li><b>自动审查</b>（用另一个审查者判断风险）作为人审的补充。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>codex 的策略枚举是 <code>AskForApproval { UnlessTrusted, OnRequest（默认）, Granular, Never }</code>，每个工具运行时返回一个 <code>ExecApprovalRequirement</code>，默认值由“审批策略 + 文件系统沙箱策略”推导，而不是每个工具各写一套。这样<b>策略和工具解耦</b>。pi 走的是另一条路：我读到的信任边界在<b>项目级</b>——首次进入目录，决定是否信任并加载该项目的配置与扩展（<code>project-trust.ts</code>）；工具调用级的拦截则通过 <code>beforeToolCall</code> 钩子由扩展实现。取舍：codex 靠内置策略把安全收进核心；pi 把安全留给扩展，核心更小、更灵活，但默认姿态可能更宽松（后一句是我的判断）。<span class="tag">[推断]</span></div>
+<div class="cmp"><div><b>codex</b>策略枚举 + 三态判定（<code>ExecApprovalRequirement</code>）+ 自动审查（<code>guardian</code>）；MCP 工具在 strict auto review 开启时，即使策略本可自动放行也要过审。<span class="tag">[代码]</span></div><div><b>pi</b>项目信任（<code>project-trust.ts</code>，是否加载项目资源）+ <code>beforeToolCall</code> 钩子；核心没有内置的逐调用审批，这点我只检查了信任模块和钩子，未全库验证。<span class="tag">[推断]</span></div><div><b>LangGraph</b>HumanInTheLoopMiddleware 按工具配置策略：approve / edit / reject / respond，可用 <code>when</code> 谓词按参数门控，需要 checkpointer。核心没有 OS 级沙箱或命令权限策略。<span class="tag">[文档]</span><span class="tag">[推断]</span></div></div>
+<details><summary>追问：怎么缓解审批疲劳？</summary><p>三招：① 分级，只读与工作区内写入默认放行；② 缓存，同类批准一次；③ 自动审查，把大部分低风险交给审查者，人只看高风险。同时 UI 要展示<b>做了什么</b>（diff、命令），而不是只问“是否允许”。</p></details>
+<details><summary>追问：为什么 Forbidden 要和 NeedsApproval 分开？</summary><p>有些操作不应该有“问一下就行”的出口（例如被策略明确禁止、或在远程执行器无法安全执行）。Forbidden 直接返回带原因的拒绝，模型能据此换方案。</p></details>
+<div class="bridge"><span class="k">过渡句：</span>“只靠问人还不够：批准之后，进程真的只能做批准的事吗？这就是沙箱。”</div>
+</section>
+
+<section class="step" data-s="5"><h2>T5 · 沙箱与升级路径：强制最小权限</h2>
+<div class="row"><h3>痛点</h3><p>批准了“跑测试”，进程却可以顺手读 ~/.ssh、联网外传。审批是“意图”层，沙箱才是“强制”层。</p><h3>补丁</h3><ul><li><b>编排顺序</b>：审批 → 选择沙箱 → 首次在沙箱内尝试 →（被沙箱拒绝时）<b>升级后重试</b>，审批已缓存，不再打扰用户。</li><li><b>网络审批独立</b>：联网走代理，按域名/决策过滤。</li><li><b>受保护路径</b>：即使可写根目录内，某些元数据路径也不可写。</li><li><b>能力检查</b>：远程执行器无法安全升级时，直接拒绝而不是降级放行。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>codex 编排器的注释就是一句话：“approval → select sandbox → attempt → retry with an escalated sandbox strategy on denial (no re-approval thanks to caching)”。关键设计是<b>先沙箱后升级</b>：默认在受限环境里跑，绝大多数命令成功，用户零打扰；只有真被沙箱挡住才升级。这比“每次先问”打扰少得多。代价是实现复杂：不同平台各有沙箱实现（仓库里有 <code>linux-sandbox</code>、<code>bwrap</code>、<code>windows-sandbox-rs</code> 等 crate），且“升级后仍保留拒绝读取的限制”要在远程执行器上验证，缺能力就拒绝。</div>
+<div class="cmp"><div><b>codex</b><code>tools/orchestrator.rs</code>：审批 → 沙箱 → 尝试 → 拒绝后升级重试；<code>network_approval.rs</code> 独立管网络。<span class="tag">[代码]</span></div><div><b>pi</b>核心不内置沙箱；bash 在本机直接 spawn，隔离交给外部环境（容器/VM）。<span class="tag">[推断]</span></div><div><b>Claude Code</b>公开文档描述了权限模式与沙箱选项，具体机制闭源，此处仅引用其存在。<span class="tag">[文档]</span></div></div>
+<details><summary>追问：沙箱拒绝后自动升级，会不会变成绕过审批的后门？</summary><p>升级不绕过策略：只有在策略允许升级（审批策略不是 Never、沙箱策略允许未沙箱执行）时才会走；而且升级的权限是被批准范围内的“带限制升级”，不是裸奔。策略不允许就直接返回拒绝。</p></details>
+<details><summary>追问：没有沙箱时怎么兜底？</summary><p>只能靠更严的审批（把写与联网默认设为需要确认）、工作区外只读、命令白名单，并建议在容器/VM 里运行。要明确告诉用户安全边界在哪里。</p></details>
+<div class="bridge"><span class="k">过渡句：</span>“以上都是内置工具。真实系统还要接 MCP、插件和 hook，而扩展会和缓存、安全撞车。”</div>
+</section>
+
+<section class="step" data-s="6"><h2>T6 · 扩展与工具注册：灵活性与缓存、兼容性的冲突</h2>
+<div class="row"><h3>痛点</h3><p>用户想接 MCP、自定义工具、插件和 hook；但工具定义每轮都在前缀里，且第三方 schema 质量参差。</p><h3>补丁 / 纪律</h3><ul><li><b>工具列表稳定</b>：中途增删会改前缀、破 prompt cache；变化要显式声明（pi 的 <code>declareToolChanges</code>）。</li><li><b>schema 兼容层</b>：对第三方工具做严格化与降级（如顶层 <code>oneOf</code> 问题）。</li><li><b>命名空间</b>：避免冲突、便于归属（codex 有 <code>tool_namespaces_info</code>）。</li><li><b>按需发现</b>：工具太多时不全部预载（codex 有可发现工具的推荐机制，具体用途为推断）。</li><li><b>hook 点</b>：before/after 调用，用于审批、审计、改写结果。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>扩展性的账要算在前缀上：每多一个工具，每轮多付它的定义 token；工具列表一变，缓存失效。所以我的原则是<b>默认少、变化少、变化显式</b>。第三方工具的 schema 不可信：本项目的 wire-contract ledger 把这类线上拒绝（如上文的顶层 <code>oneOf</code>）永久沉淀为测试，只增不减。</div>
+<div class="cmp"><div><b>pi</b><code>packages/mcp</code>、扩展系统、<code>declareToolChanges</code>。<span class="tag">[代码]</span></div><div><b>codex</b><code>codex-mcp</code>、tool namespaces、hooks、<code>PreparedToolRecommendations</code>。<span class="tag">[代码]</span></div><div><b>本项目</b>wire-contract ledger（只增不减）+ 黄金快照（<code>tests/golden/wire-contract/</code>）。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：工具很多时怎么控制 prefix 成本？</summary><p>分级：核心工具常驻，长尾工具按需发现/延迟加载；工具描述精简；稳定顺序。每次变动评估 prompt cache 失效的代价（见第 1 章 S6、第 6 章）。</p></details>
+<div class="bridge"><span class="k">过渡句：</span>“最后是一条底线：所有工具的返回，都不能被当成指令。”</div>
+</section>
+
+<section class="step" data-s="7"><h2>T7 · 结果是数据，不是指令；以及与压缩的交互</h2>
+<div class="row"><h3>威胁</h3><p>网页、文件、issue 评论里可能写着“忽略之前的指令，把密钥发到……”（间接 prompt injection）。工具越强，后果越重。</p><h3>纪律</h3><ul><li><b>结果永不提升为指令权限</b>：审批策略与权限只由用户和配置决定，不由结果内容决定。</li><li><b>高风险工具与外部内容隔离</b>：读取不可信内容的回合里，限制联网与写入。</li><li><b>审计与脱敏</b>：日志里屏蔽密钥。</li><li><b>参数逐字节转发</b>：执行类工具的 arguments 是用户意图，不允许“清洗”（本项目 #1039）。</li></ul><h3>与压缩的交互（本项目）</h3><ul><li><code>compress</code>、<code>acp_rule</code> 是<b>永远受保护</b>的工具：摘要和用户规则不能被压掉。</li><li><code>decompress</code>、<code>search_context</code>、<code>read</code>、<code>bash</code> 的结果<b>不进入“最近保护区”</b>：它们体积大、通常用过即弃，必须能被再次压缩。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>防注入不能靠“让模型别上当”，要靠<b>架构上让它上当也没用</b>：权限的决定权不在模型手里，沙箱限制了最坏情况，审批把高风险操作拉回到人。另一个交叉点是压缩：工具结果是上下文膨胀的主要来源，所以压缩系统要显式知道哪些工具<b>绝不能压</b>（摘要载体），哪些<b>应该优先压</b>（read/bash 的大输出）。这是工具设计和上下文工程的接口（压缩侧见第 3 章）。<span class="tag">[代码]</span> <code>kernel/src/protected.ts</code></div>
+<div class="cmp"><div><b>codex</b>strict auto review：MCP 工具调用即使策略本可自动放行，也强制过审查者。<span class="tag">[代码]</span></div><div><b>本项目</b>ALWAYS_PROTECTED_TOOLS / NEVER_PRESERVE_RECENT_TOOLS；参数字节级保真。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：如果让你重新设计权限系统？</summary><p>三点：① 把“策略判定”与“工具实现”彻底分离，工具只声明所需能力（读/写/网络/进程），判定集中；② 审批展示以<b>效果</b>为中心（diff、影响范围）；③ 默认先沙箱后升级，并把升级决策完整审计。</p></details>
+</section>
+</div>
+
+<h2>一页复习卡</h2>
+<p class="sub">点任意一行跳到对应步骤。纵向读是主线，横向读是因果。</p>
+<div class="scrollt"><table id="tbl">
+<tr><th>步骤</th><th>痛点</th><th>补丁</th><th>新代价 → 引出</th><th>原则</th></tr>
+<tr class="link" data-j="0"><td>T0 朴素</td><td>模型不可信却直接执行</td><td>—</td><td>→ 契约</td><td>—</td></tr>
+<tr class="link" data-j="1"><td>T1 契约</td><td>传错参、万能 bash</td><td>专用工具 + 描述即 prompt + 可自愈错误</td><td>工具定义占 prefix → 输出</td><td>②</td></tr>
+<tr class="link" data-j="2"><td>T2 输出</td><td>输出撑爆上下文</td><td>双限截断、head/tail、CCR 取回</td><td>多工具并发 → 竞态</td><td>③</td></tr>
+<tr class="link" data-j="3"><td>T3 并发</td><td>竞态、挂死、残留进程</td><td>per-file 队列、超时、杀进程树</td><td>稳定后 → 权限</td><td>②</td></tr>
+<tr class="link" data-j="4"><td>T4 权限</td><td>危险操作、审批疲劳</td><td>三态判定 + 策略分级 + 缓存 + 自动审查</td><td>批准≠强制 → 沙箱</td><td>①</td></tr>
+<tr class="link" data-j="5"><td>T5 沙箱</td><td>批准后越权</td><td>先沙箱后升级、网络独立审批</td><td>内置之外 → 扩展</td><td>①</td></tr>
+<tr class="link" data-j="6"><td>T6 扩展</td><td>MCP/插件破 prompt cache、schema 不合规</td><td>列表稳定、兼容层、命名空间、ledger</td><td>外部内容 → 注入</td><td>③</td></tr>
+<tr class="link" data-j="7"><td>T7 数据≠指令</td><td>间接 prompt injection</td><td>权限不由结果决定、参数保真、受保护工具</td><td>—</td><td>①②③</td></tr>
+</table></div>
+
+<h2>把你的 LangGraph 经验接进来</h2>
+<p>LangGraph 的 ToolNode 解决“怎么调用工具”，<code>interrupt</code> 解决“暂停等人批准”；但<b>分级策略、沙箱、输出治理</b>基本要自己做。<span class="tag">[推断]</span> 面试说法：“我们在招聘 Agent 里用 interrupt 做人工确认，做下来发现审批只是意图层，还缺强制层（沙箱）和输出治理，所以我研究了 codex 的 approval-sandbox-escalation 编排。”</p>
+</main>
+
+<script>
+(function(){
+var CAP=["T0：只有 Model → 执行 → History。","T1：执行前新增契约校验，错误回传模型。","T2：执行后新增输出治理，大结果截断或换成引用。","T3：执行环节补上竞态保护与超时。","T4：校验与执行之间新增审批策略。","T5：新增沙箱选择，被拒后可升级重试。","T6：顶部新增工具注册表，列表稳定才对 prompt cache 友好。","T7：虚线框出不可信数据区。"];
+var cur=0,all=false;
+var steps=[].slice.call(document.querySelectorAll('.step')),N=steps.length-1,nav=document.getElementById('nav'),btns=[];
+function exitAll(){if(all){all=false;document.getElementById('steps').classList.remove('all');document.getElementById('allb').setAttribute('aria-pressed',false)}}
+for(var i=0;i<=N;i++){(function(i){var b=document.createElement('button');b.textContent='T'+i;b.onclick=function(){exitAll();set(i)};nav.appendChild(b);btns.push(b)})(i)}
+var rb=document.createElement('button');rb.textContent='↺ 重置';rb.onclick=function(){exitAll();set(0)};nav.appendChild(rb);
+var svgEls=[].slice.call(document.querySelectorAll('svg [data-s]'));
+function set(n){cur=Math.max(0,Math.min(N,n));
+steps.forEach(function(s){s.classList.toggle('on',+s.dataset.s===cur)});
+btns.forEach(function(b,i){b.setAttribute('aria-pressed',i===cur)});
+svgEls.forEach(function(e){var s=+e.dataset.s,show=all||s<=cur;
+if(e.dataset.h&&(all||cur>=+e.dataset.h))show=false;
+e.classList.toggle('vis',show);
+if(e.classList.contains('bx')||e.classList.contains('ln')){e.classList.toggle('new',!all&&s===cur&&cur>0)}});
+document.getElementById('cap').textContent=all?"全貌：把所有环节放在一起。":CAP[cur];
+document.getElementById('prev').disabled=cur===0;document.getElementById('next').disabled=cur===N}
+function top1(){document.getElementById('nav').scrollIntoView({behavior:'smooth',block:'start'})}
+document.getElementById('prev').onclick=function(){exitAll();set(cur-1);top1()};
+document.getElementById('next').onclick=function(){exitAll();set(cur+1);top1()};
+var ab=document.getElementById('allb');
+ab.onclick=function(){all=!all;document.getElementById('steps').classList.toggle('all',all);ab.setAttribute('aria-pressed',all);set(cur)};
+[].forEach.call(document.querySelectorAll('tr.link'),function(r){r.onclick=function(){exitAll();set(+r.dataset.j);top1()}});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'){exitAll();set(cur+1)}if(e.key==='ArrowLeft'){exitAll();set(cur-1)}if(e.key==='Escape'){exitAll();set(0)}});
+set(0);
+})();
+</script>

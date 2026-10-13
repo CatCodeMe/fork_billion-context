@@ -1,0 +1,231 @@
+<title>Agent Loop 演进讲法</title>
+<style>
+:root{--bg:#f6f7f4;--fg:#1d2321;--mut:#5d6965;--line:#d9ded9;--card:#fff;--acc:#0f766e;--accbg:#e1f1ee;--warn:#b45309;--warnbg:#fbeedb;--code:#eef1ee}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121715;--fg:#e6ebe8;--mut:#9aa7a2;--line:#2b3531;--card:#1a2220;--acc:#4fd1c1;--accbg:#183532;--warn:#f0b35a;--warnbg:#3a2c14;--code:#222c29;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121715;--fg:#e6ebe8;--mut:#9aa7a2;--line:#2b3531;--card:#1a2220;--acc:#4fd1c1;--accbg:#183532;--warn:#f0b35a;--warnbg:#3a2c14;--code:#222c29;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.75 "IBM Plex Sans",-apple-system,"PingFang SC",sans-serif;padding-inline:16px;padding-block:24px 64px}
+main{max-width:860px;margin:0 auto}
+h1{font:700 28px/1.2 "Bricolage Grotesque","IBM Plex Sans",sans-serif;margin:0 0 6px;text-wrap:balance}
+h2{font:700 19px/1.3 "Bricolage Grotesque","IBM Plex Sans",sans-serif;margin:30px 0 8px;text-wrap:balance}
+h3{font-size:14px;margin:16px 0 4px;color:var(--acc);letter-spacing:.02em}
+p{margin:6px 0}.sub{color:var(--mut)}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px;background:var(--code);padding:1px 5px;border-radius:4px}
+pre{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px;background:var(--code);padding:10px 12px;border-radius:8px;overflow-x:auto}
+.tag{font:600 11px "IBM Plex Mono",monospace;padding:1px 6px;border-radius:4px;background:var(--code);color:var(--mut);white-space:nowrap}
+button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:5px 11px;border-radius:8px;cursor:pointer}
+button[aria-pressed="true"]{background:var(--acc);color:var(--bg);border-color:var(--acc)}
+.elev{background:var(--accbg);border-left:4px solid var(--acc);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+.elev b{color:var(--acc)}
+.inv{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:10px 0}
+.inv>div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:2px 14px 8px;min-width:0}
+.nav{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);padding-block:8px;z-index:3;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.nav .sp{flex:1}
+figure{margin:10px 0}figcaption{color:var(--mut);font-size:13px}
+.scrollx{overflow-x:auto}svg{max-width:100%;height:auto;color:var(--fg)}
+svg [data-s]{display:none}
+svg [data-s].vis{display:inline}
+.bx rect{fill:var(--card);stroke:currentColor;stroke-width:1.2}
+.bx text{fill:currentColor;font-size:12px}
+.bx.new rect{fill:var(--accbg);stroke:var(--acc);stroke-width:2.2}
+.bx .t{font-weight:700}
+.ln{stroke:currentColor;fill:none;stroke-width:1.3}
+.ln.new{stroke:var(--acc);stroke-width:2.2}
+.lbl{font-size:11px;fill:var(--mut)}
+.dash{stroke-dasharray:5 4}
+.step{display:none}
+.step.on,.all .step{display:block}
+.step>h2{border-top:1px solid var(--line);padding-top:16px}
+.row{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px 14px 10px;margin:10px 0}
+.say{background:var(--accbg);border-left:4px solid var(--acc);padding:10px 14px;border-radius:0 8px 8px 0;margin:8px 0}
+.say .k{color:var(--acc);font-weight:700}
+.bridge{background:var(--warnbg);border-left:4px solid var(--warn);padding:10px 14px;border-radius:0 8px 8px 0;margin:10px 0}
+.bridge .k{color:var(--warn);font-weight:700}
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin:8px 0}
+.cmp>div{border:1px solid var(--line);border-radius:8px;padding:6px 12px;background:var(--card);min-width:0;font-size:14px}
+.cmp b{display:block;font-size:12px;color:var(--mut);font-family:"IBM Plex Mono",monospace}
+details{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:4px 12px;margin:6px 0}
+summary{cursor:pointer;font-weight:600}
+.scrollt{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:680px;font-size:13.5px}
+th,td{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}th{color:var(--mut)}
+tr.link{cursor:pointer}tr.link:hover td{background:var(--accbg)}
+</style>
+
+<main>
+<h1>Agent Loop：一条演进主线</h1>
+<p class="sub">用一条线把所有内容串起来：从最朴素的 loop 出发，每遇到一个现实问题加一个补丁，每个补丁带来新的代价，代价引出下一步。面试时按这条线讲，每一步结尾的“过渡句”就是自然的衔接。<span class="tag">[代码]</span> 读过源码 <span class="tag">[推断]</span> 我的判断 <span class="tag">[文档]</span> 公开行为 <span class="tag">[论文]</span> 作者自报</p>
+
+<div class="elev"><b>60 秒电梯版（开场就说这段）</b><br>
+“Agent loop 表面是个 while 循环，难点全在<b>现实问题逼出来的补丁</b>。我习惯按演进顺序讲：朴素 loop 先<b>停不对</b>，于是加停止策略；工具一多就要管<b>配对、并行、审批</b>；用户会<b>打断</b>；上游会<b>报错</b>；跑久了<b>上下文爆炸</b>，于是要压缩；压缩又会<b>打碎 prompt cache</b>，于是要算收益账；这套东西最后要<b>证明没做坏</b>。我们还把它搬到了<b>代理层</b>，不改客户端也能用。每一步我都能讲取舍和对标。”</div>
+
+<h2>三条贯穿全程的不变量</h2>
+<p>后面每一步都在守护其中一条，讲的时候反复点名，听起来就是一个体系而不是一堆技巧。</p>
+<div class="inv">
+<div><p><b>① History 是唯一真相源</b><br>每轮请求是它的“投影”；改写只发生在投影，不破坏原始记录。</p></div>
+<div><p><b>② Call/Result 必须成对</b><br>任何路径（中止、压缩、恢复）之后都要满足，否则 provider 直接拒绝。</p></div>
+<div><p><b>③ Prefix 尽量稳定</b><br>只追加、少改写，才能命中 prompt cache；这是成本的主要来源（详见第 6 章）。</p></div>
+</div>
+
+<h2>演进图（随步骤逐步长出来）</h2>
+<div class="nav" id="nav"></div>
+<figure><div class="scrollx">
+<svg viewBox="0 0 760 350" width="760" role="img" aria-label="Agent runtime 随步骤逐步增加部件的结构图">
+<defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs>
+<g marker-end="url(#ar)">
+<path class="ln" data-s="0" d="M140 178 H350" id="direct"/>
+<path class="ln" data-s="5" d="M140 178 H185"/><path class="ln" data-s="5" d="M305 178 H350"/>
+<path class="ln" data-s="0" d="M470 178 H545"/>
+<path class="ln" data-s="0" d="M610 206 V320 H80 V206"/>
+<path class="ln" data-s="1" d="M410 206 V240"/>
+<path class="ln" data-s="3" d="M150 265 H110 V206"/>
+<path class="ln" data-s="4" d="M410 114 V150"/>
+<path class="ln dash" data-s="5" d="M350 92 H245 V150"/>
+</g>
+<text class="lbl" data-s="0" x="480" y="170">tool call</text>
+<text class="lbl" data-s="0" x="620" y="270">result 追加</text>
+<text class="lbl" data-s="1" x="416" y="226">无 tool call?</text>
+<text class="lbl" data-s="4" x="416" y="136">错误分类</text>
+<text class="lbl" data-s="5" x="250" y="88">溢出 → 压缩</text>
+<g class="bx" data-s="0"><rect x="20" y="150" width="120" height="56" rx="8"/><text class="t" x="30" y="172">History</text><text x="30" y="192">唯一真相源</text></g>
+<g class="bx" data-s="0"><rect x="350" y="150" width="120" height="56" rx="8"/><text class="t" x="360" y="172">Model 调用</text><text x="360" y="192">stream</text></g>
+<g class="bx" data-s="0"><rect x="545" y="150" width="130" height="56" rx="8"/><text class="t" x="555" y="172">Tools 执行</text><text x="555" y="192">结果回 history</text></g>
+<g class="bx" data-s="1"><rect x="350" y="240" width="150" height="50" rx="8"/><text class="t" x="360" y="261">停止策略</text><text x="360" y="279">预算·hook 否决</text></g>
+<g class="bx" data-s="2"><rect x="545" y="95" width="130" height="38" rx="8"/><text class="t" x="555" y="119">审批 · 并行</text></g>
+<g class="bx" data-s="3"><rect x="150" y="240" width="170" height="50" rx="8"/><text class="t" x="160" y="261">输入队列</text><text x="160" y="279">abort·steer·follow-up</text></g>
+<g class="bx" data-s="4"><rect x="350" y="70" width="120" height="44" rx="8"/><text class="t" x="360" y="90">重试分流</text><text x="360" y="106">三类错误</text></g>
+<g class="bx" data-s="5"><rect x="185" y="150" width="120" height="56" rx="8"/><text class="t" x="195" y="172">投影 / 压缩</text><text x="195" y="192">fold·CCR·crush</text></g>
+<g data-s="6"><path class="ln dash" d="M30 140 H470"/><text class="lbl" x="150" y="132">前缀稳定 = 命中缓存；折叠要算收益账</text></g>
+<g class="bx" data-s="7"><rect x="520" y="240" width="200" height="50" rx="8"/><text class="t" x="530" y="261">验证</text><text x="530" y="279">不变量·ledger·e2e</text></g>
+<g data-s="8"><rect x="175" y="40" width="305" height="260" rx="10" fill="none" stroke="var(--acc)" stroke-width="2" stroke-dasharray="6 4"/><text x="185" y="34" font-size="12" fill="var(--acc)">代理层（billion-context）：不改客户端，在这里做投影与内循环</text></g>
+</svg></div>
+<figcaption id="cap"></figcaption></figure>
+
+<div class="nav" style="position:static;border:0;padding:0"><button id="prev">← 上一步</button><button id="next">下一步 →</button><span class="sp"></span><button id="allb" aria-pressed="false">全文连读</button></div>
+<div id="steps">
+
+<section class="step" data-s="0"><h2>S0 · 最朴素的 loop：能跑，但上线必出事</h2>
+<pre>while (true) {
+  resp = model(history)
+  history.push(resp)
+  if (!resp.toolCalls.length) break
+  for (c of resp.toolCalls) history.push(run(c))
+}</pre>
+<div class="say"><span class="k">怎么说：</span>这五行是所有 agent 的骨架：采样、追加、有 tool call 就执行并追加结果、没有就停。我先把它摆出来，因为后面每一个补丁都能指回这五行里的某一处——这样讲不会散。</div>
+<div class="row"><h3>这五行里藏着的洞</h3><ul><li><code>break</code> 的条件太单薄 → S1</li><li><code>run(c)</code> 没管并行、危险操作、失败 → S2</li><li>用户中途按停、插话没位置 → S3</li><li><code>model()</code> 会抛、会限流、会超窗口 → S4</li><li>history 只增不减，迟早装不下 → S5</li></ul></div>
+<div class="bridge"><span class="k">过渡句：</span>“先说最基础的：它什么时候该停，什么时候不该停。”</div>
+</section>
+
+<section class="step" data-s="1"><h2>S1 · 停止策略：“没有 tool call”不够用</h2>
+<div class="row"><h3>痛点</h3><p>模型有时说完计划就收尾（偷懒）；有时反复调用停不下来；还有时输出被 length 截断在 tool call 中间。</p><h3>补丁</h3><ul><li>四类终止：<b>自然</b>（无 call）、<b>外部</b>（abort）、<b>预算</b>（轮数/token/时间）、<b>失败</b>（不可恢复/重复失败）。</li><li>宿主可<b>否决停止</b>（hook 强制再采样一次）。</li><li>终止原因做成<b>显式枚举</b>，不要靠猜消息文本。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>默认的“无 tool call 就停”只覆盖自然终止。生产里我要再加外部、预算、失败三类，并给宿主一个否决收尾的钩子，因为模型会偷懒。取舍是：钩子越强，越要防<b>无限续命</b>，所以必须有轮数上限，并且每次续命要可观测。</div>
+<div class="cmp"><div><b>pi</b><code>finishTurn</code> 可返回 <code>{action:"continue"}</code>；<code>beforeToolCall</code> 的 <code>terminate</code> 要求批次内<b>全部</b>结果置位才提前结束（AND 语义，保守）。<span class="tag">[代码]</span></div><div><b>codex</b>回合末有 Stop hooks，可阻止收尾；循环由 <code>needs_follow_up</code> 驱动。<span class="tag">[代码]</span></div><div><b>LangGraph</b>终止由条件边路由到 END；另有 recursion limit 兜底（文档称默认 1000，自 1.0.6 起；超限抛 <code>GraphRecursionError</code>），可用 <code>RemainingSteps</code> 在耗尽前主动路由。<span class="tag">[文档]</span></div></div>
+<details><summary>追问：输出被截断恰好在 tool call 中间怎么办？</summary><p>绝不能执行半截参数。pi 在 <code>stopReason=="length"</code> 时把整批 call 直接判为失败，不执行<span class="tag">[代码]</span>；我的做法是归为“可重试并带提示”的一类，告诉模型上次被截断，缩小产出。<span class="tag">[推断]</span></p></details>
+<details><summary>追问：怎么发现模型在原地打转？</summary><p>确定性失败按“工具名+参数”签名去重（见 S4）；非确定性的看连续失败计数和相邻轮的输出相似度，超限就终止并把原因回给用户。</p></details>
+<div class="bridge"><span class="k">过渡句：</span>“停的问题解决了，但每一轮里工具怎么执行，里面还有很多细节：配对、并行、危险操作。”</div>
+</section>
+
+<section class="step" data-s="2"><h2>S2 · 工具执行：配对、并行与审批</h2>
+<div class="row"><h3>痛点</h3><p>一次回复可有多个 call；并行有速度但有副作用冲突；有些操作（删文件、联网）必须人确认；工具会失败。</p><h3>补丁</h3><ul><li><b>配对不变量</b>：每个 call 必须有且只有一个 result，顺序与 call 对应。</li><li><b>默认顺序</b>，工具元数据声明只读才允许并行。</li><li><b>审批在 prepare 阶段串行</b>，执行阶段再并发。</li><li><b>失败当作 result 返回模型</b>，不抛出打断循环。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>有个细节很能体现功力：<b>事件流和 history 要分开满足</b>。并行时 UI 要即时，所以执行结束事件按完成顺序发；但 provider 要求配对稳定，所以 result 消息按 assistant 原顺序落进 history。审批必须先串行做完，否则同时弹出多个确认框，用户没法判断上下文。</div>
+<div class="cmp"><div><b>pi</b><code>ToolExecutionMode</code>：sequential / parallel；并行是“顺序 prepare + 并发 execute”，<code>tool_execution_end</code> 按完成顺序发，result 按源顺序落盘。<span class="tag">[代码]</span></div><div><b>codex</b>审批是独立维度 <code>AskForApproval</code>（UnlessTrusted / OnRequest 默认 / Granular / Never），由工具编排器在执行前检查；并行见 <code>tools/parallel.rs</code>。<span class="tag">[代码]</span></div><div><b>LangGraph</b>同一 super-step 内的节点并行执行；人工审批用 <code>interrupt</code> 或 HumanInTheLoopMiddleware（approve / edit / reject / respond），都需要 checkpointer。<span class="tag">[文档]</span></div></div>
+<details><summary>追问：并行和审批怎么共存？</summary><p>审批串行在前，通过后的 call 再进入并发执行；被拒绝的 call 生成“已拒绝”的 result 而不是丢弃，保持配对。pi 的 <code>beforeToolCall</code> 返回 <code>{block, reason}</code> 就是这个语义。</p></details>
+<details><summary>追问：codex 怎么区分可并行与独占工具？</summary><p>我推断是读写锁一类机制（可并行工具共享、独占工具互斥），没有逐行验证。<span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“工具一执行就可能很久，这时候用户想打断，history 怎么保持合法？”</div>
+</section>
+
+<section class="step" data-s="3"><h2>S3 · 用户打断：中止与转向</h2>
+<div class="row"><h3>痛点</h3><p>用户可能是“别干了”（中止），也可能是“边干边听我一句”（转向）；打断点可能在流式输出中、工具执行中。</p><h3>补丁</h3><ul><li><b>cancellation token</b> 贯穿流读取与工具执行。</li><li><b>中止</b>：已发出的 call 补 aborted 的 result（守不变量 ②）。</li><li><b>转向</b>：steering 在<b>工具批次之间</b>注入用户消息；<b>follow-up</b> 队列等回合真正结束再处理。</li><li>队列模式：一次注入全部，或一次一条。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>我先区分意图。中止最关键的是别留下孤儿 call；转向最关键的是落点合法——批次之间是安全点，既及时又不会插进未配对的 call 中间。取舍是：注入越及时越要保证落点合法，排到回合末最安全但用户觉得没被听到。</div>
+<div class="cmp"><div><b>pi</b><code>getSteeringMessages</code> / <code>getFollowUpMessages</code>，<code>QueueMode</code>（all / one-at-a-time）。<span class="tag">[代码]</span></div><div><b>codex</b>有 <code>preempt</code> 取消令牌，用户插话会在步骤之间被排空（steer）；用户中止走 <code>TurnAborted</code> 事件，未完成的 tool call 由 <code>AbortedToolOutput</code> 补 result。<span class="tag">[代码]</span></div><div><b>LangGraph</b><code>interrupt()</code> 暂停，之后用 <code>Command(resume=...)</code> 在同一 thread_id 上恢复；恢复时<b>整个节点从头重跑</b>，interrupt 之前的副作用必须幂等；checkpoint 粒度是 super-step。<span class="tag">[文档]</span></div></div>
+<details><summary>追问：为什么不在工具执行中途注入用户消息？</summary><p>因为此时 assistant 的 call 还没配对完，插入 user 消息会让序列变成“call → user → result”，多数 provider 会拒绝或让模型困惑。</p></details>
+<div class="bridge"><span class="k">过渡句：</span>“打断让‘采样被取消、被重试’成了常态路径，那么上游出错的时候，该怎么分流？”</div>
+</section>
+
+<section class="step" data-s="4"><h2>S4 · 失败与重试：按类型分流，不盲目重试</h2>
+<div class="row"><h3>痛点</h3><p>网络断流、5xx、限流、鉴权失败、超窗口……盲目 retry 会放大 rate limit，也会对确定性失败白白重试。</p><h3>补丁</h3><ul><li><b>三分类</b>：① 可原样重试（退避，有上限）② 需改写后重试（溢出 → 交上层压缩）③ 不可重试（鉴权、用量耗尽 → 立即上报）。</li><li><b>one-shot guard</b>：溢出压缩后只重试一次。</li><li>确定性失败（参数校验）按签名去重，重复即退出。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>关键是“溢出不在原地重试”——它是确定性的，原样再发必然再溢出，要先改变输入（压缩），所以返回上层处理。另一个细节：重试发生在采样层，只重发模型请求，不会重复执行已完成的工具。</div>
+<div class="cmp"><div><b>codex</b><code>ContextWindowExceeded</code> → 标记 token 已满并向上返回（由上层 compaction 处理）；<code>UsageLimitReached</code> → 更新限流状态并返回；其余走 <code>handle_response_stream_error</code>，次数取 provider 的 <code>stream_max_retries</code>。<span class="tag">[代码]</span></div><div><b>pi</b><code>_checkCompaction</code>：overflow 情形压缩后只重试一次。<span class="tag">[代码]</span></div><div><b>本项目</b>内循环 <code>MAX_LOOP_ROUNDS=10</code>；<code>failedSignatures</code>（#156）针对代理自己执行的 compress/decompress：参数校验是确定性的，同参重复提交必然再失败，立即退出而不等到轮数上限。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：压缩后仍溢出会死循环吗？</summary><p>所以要 one-shot guard。压缩后仍溢出，说明单条消息过大或保留段设置不合理，再试没有意义，应上报。</p></details>
+<div class="bridge"><span class="k">过渡句：</span>“而溢出这件事本身才是根问题：history 只增不减，所以下一步是上下文增长。”</div>
+</section>
+
+<section class="step" data-s="5"><h2>S5 · 上下文增长：压缩放在哪、怎么压（本章核心）</h2>
+<div class="row"><h3>痛点</h3><p>history 每轮增长，迟早超窗口；工具输出（日志、文件）尤其大。</p><h3>补丁</h3><ul><li><b>投影层（projection）</b>：压缩只改投影，原始历史保留。</li><li><b>触发位置</b>：请求前预检 / 回合中途 / 回合后 / 溢出后被动。主动为主、被动兜底，用实测 usage 校准估算。</li><li><b>切点</b>不能落在 tool result 上（守不变量 ②）。</li><li><b>摘要谁写</b>：专起一次摘要请求，或让正在工作的模型自己写。</li><li><b>大工具输出</b>：到达时替换一次（CCR），按需取回；无损优先，有损保留 ERROR 行。</li></ul><p class="sub">机制细节见第 3 章。</p></div>
+<div class="say"><span class="k">怎么说：</span>被动压缩简单、几乎不误触发，但每次溢出白付一次请求，还恰好在任务中途打断；主动压缩省钱，但依赖 token 估算，估低还是溢出，估高提前丢细节。所以我主张主动为主、被动兜底。本项目走得更远：不看占用率，按<b>增长量</b>（每新增约 50K）用 nudge 提示模型自己压缩——“什么值得保留”只有正在干活的模型知道。</div>
+<div class="cmp"><div><b>pi</b><code>contextTokens &gt; window − reserveTokens(16384)</code> 触发 compaction；保留近期 <code>keepRecentTokens(20000)</code>；<code>findCutPoint</code> 不切在 tool result，处理 split turn。<span class="tag">[代码]</span></div><div><b>codex</b>回合前 <code>run_pre_sampling_compact</code>，循环中 <code>should_roll_over</code> → <code>MidTurn</code> compaction；本地 <code>compact.rs</code> 或远端 <code>compact_remote_v2</code>；摘要带固定前缀 <code>SUMMARY_PREFIX</code>。<span class="tag">[代码]</span></div><div><b>本项目</b>kernel 不调模型；固定 50K 增长步长；T1/T2/T3 三层折叠（fold）；CCR（默认 ≥4000 token 的工具结果到达即替换）、crush（JSON 无损；代码/日志有损且 fail-open）。<span class="tag">[代码]</span></div><div><b>LangGraph</b>压缩靠中间件：<code>SummarizationMiddleware</code>（可配触发阈值，永久替换旧消息）或消息裁剪。摘要是有损且永久替换的；文档里没看到按引用取回原文的机制。<span class="tag">[文档]</span><span class="tag">[推断]</span></div></div>
+<details><summary>追问：为什么用固定增长步长而不是窗口比例？</summary><p>团队明确决定“增长驱动、无占用率代理门”（AGENTS.md KDD#8）：1M 窗口也每增长 50K 折叠一次，是想要的精简行为；想更懒的用户用 <code>compress.nudgeGrowthTokens</code> 自调。代价是折叠更频繁。<span class="tag">[代码]</span></p></details>
+<details><summary>追问：摘要质量怎么保证？会不会丢关键信息？</summary><p>三道保险：① 摘要引用原消息的 ref 标签，可 <code>decompress</code> 还原；② 大工具输出可 <code>acp_retrieve</code> 取回；③ 有损变换保留 ERROR/FAIL 行并 fail-open。效果上，重新读取次数少 2.7 倍来自对照 pilot（单一模型 qwen3.8-27b、temperature 0、本地 sglang），且归因于“使用准则 + ref 标签”这一整套，不是压缩本身。<span class="tag">[论文]</span></p></details>
+<details><summary>追问：让模型自己写摘要有什么风险？</summary><p>依赖模型配合，所以有两级兜底：nudge 提示 → 占用率进入高压带（默认 75%）加强 → 紧急（默认 95%）emergency truncate；输入本身超窗时 preflight 在代理侧兜底。<span class="tag">[代码]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“但每次改写投影都可能让 prompt cache 失效——而 prompt cache 才是成本的大头，所以压缩本身要算账。”</div>
+</section>
+
+<section class="step" data-s="6"><h2>S6 · Prompt cache 经济：压缩不是越早越好</h2>
+<div class="row"><h3>痛点</h3><p>prompt cache 按前缀精确匹配，每轮重发全部 history。一次折叠会让其后的 prompt cache 全部失效。完整账见第 6 章。</p><h3>补丁</h3><ul><li><b>append-mostly</b>：已折叠块字节稳定，新折叠只发生在边界；head system message 保持字节稳定。</li><li><b>分层（T1/T2/T3）</b>：我把它类比 LSM——多数折叠只动最近一层。<span class="tag">[推断]</span></li><li><b>收益门</b>：待折叠量要够大才提示（min-benefit = max(5000, 1% 窗口)；增长门 = max(20000, 0.45×50K) = 22.5K）。<span class="tag">[代码]</span></li><li><b>易变信息放末尾</b>（时间戳放 user 而非 system，属宿主侧约定）；<b>工具列表稳定</b>。</li><li><b>身份稳定</b>：content-hash id；<code>mNNNNN</code> 引用号永不复用。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>主流服务商对 prompt cache 命中的输入价格远低于普通输入（量级约十分之一 <span class="tag">[文档]</span>），所以成本很大程度由前缀稳定度决定。这反过来约束压缩：不是越早压越好，而是折叠的收益要大于一次 prompt cache 失效的代价。引用号永不复用是硬契约——摘要里引用 <code>m00042</code>，一旦号码被重新分配，解压缩会静默指向错误内容，没有报错，只有错答案。</div>
+<div class="cmp"><div><b>pi</b>有 <code>declareToolChanges</code> 显式声明工具变化，因为工具列表变动会改前缀。<span class="tag">[代码]</span></div><div><b>本项目</b>94.2% cache-read 占比（调用间隔不足 2 分钟时）是生产观察（单用户）；31–54% 计费 token 降幅来自单模型、temperature 0 的对照 pilot。两者强度不同，别混着说。<span class="tag">[论文]</span></div><div><b>LangGraph</b>核心不做 prompt cache 治理；有服务商专用的 prompt caching 中间件；LangSmith 记录含 cache read 的 token 用量与成本。<span class="tag">[文档]</span></div></div>
+<details><summary>追问：客户端回传的历史和代理持有的状态对不上怎么办？</summary><p>需要对账（reconcile）：以精确 id 的前缀/后缀为锚点，多级回退，最后回收“僵尸块”。这是代理模式的长期成本。<span class="tag">[代码]</span> <code>src/fold-reconcile.ts</code></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“系统一复杂就要回答：你怎么证明它没把任务做坏？”</div>
+</section>
+
+<section class="step" data-s="7"><h2>S7 · 验证与证据：诚实地说强度</h2>
+<div class="row"><h3>痛点</h3><p>压缩是有损的；loop 的 bug 往往只在特定序列里才出现。</p><h3>补丁（三层）</h3><ul><li><b>不变量测试</b>：脚本化 provider 响应，断言配对、终止原因、重试次数。便宜且确定。</li><li><b>契约测试</b>：每次线上遇到的上游拒绝永久沉淀为测试（wire-contract ledger，只增不减 #1304）；真实客户端 e2e（codex CLI：预热→增长→compress→native compact）。</li><li><b>效果评估</b>：同任务有无压缩对照，比较成功率、轮数、重新读取次数。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>我会明确区分证据强度：不变量和契约是确定性证据；效果数字有两类来源：生产数据是单用户观察，对照 pilot 只在单一模型上做过。补法是多模型、多任务集做 A/B。诚实陈述证据强度，本身就是专家信号。<span class="tag">[代码]</span><span class="tag">[论文]</span></div>
+<details><summary>追问：压缩省钱的证据有多强？</summary><p>分三档：70× 常驻压缩比、94.2% cache-read 占比是<b>生产观察（单用户）</b>；31–54% 计费 token 降幅、2.7× 少重新读取来自<b>对照 pilot</b>（单一模型，temperature 0，本地 sglang），且 2.7× 归因于使用准则加 ref 标签这一整套。要下更强的结论，需要多模型、多任务集的 A/B。<span class="tag">[论文]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“以上都假设我能改客户端。本项目的特殊之处是：不改客户端，放在代理层做。”</div>
+</section>
+
+<section class="step" data-s="8"><h2>S8 · 搬到代理层：不改客户端也能管上下文</h2>
+<div class="row"><h3>动机与代价</h3><p>一次接入 codex、opencode 等所有客户端。代价：代理<b>不拥有对话</b>，只能在请求/响应中间做事。</p><h3>两种模式（任何改动都要在两种模式下推理）</h3><ul><li><b>plugin 模式</b>：agent 自己执行 <code>compress</code>，调用与结果留在其 history，摘要载体是 tool call。</li><li><b>proxy 模式</b>：代理本地执行 <code>compress</code>，调用对客户端不可见，摘要用 <code>acp_summary</code> 消息承载，并改写成 user 角色以兼容只允许一条 system 的后端。</li></ul><h3>代理内循环</h3><p>执行完不可见的 compress 后<b>重建请求体再发一轮</b>，最后把多轮终止帧合成为一个合法流。</p><h3>“不可碰”清单</h3><ul><li>thinking / redacted_thinking / thoughtSignature 逐字节保留（签名校验，#1960）。</li><li>tool-call arguments 逐字节转发（用户意图，#1039）。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>代理层让接入成本接近零，但它的复杂度全部来自“不拥有对话”：要对账、要分模式、要保证不碰客户端会回传的东西。如果重做，我会把能在客户端侧做的推给插件模式（状态天然一致），代理模式留给没有扩展点的客户端。</div>
+<div class="row"><h3>如果重做，改这四点</h3><ol><li>统一终止原因枚举。</li><li>用实测 usage 校准 token 估算。</li><li>错误分类显式建模成一等抽象。</li><li>并行由工具元数据声明，默认顺序。</li></ol></div>
+</section>
+</div>
+
+<h2>一页复习卡</h2>
+<p class="sub">点任意一行跳到对应步骤。这张表就是“思维导图”：纵向读是主线，横向读是每步的因果。</p>
+<div class="scrollt"><table id="tbl">
+<tr><th>步骤</th><th>痛点</th><th>补丁</th><th>新代价 → 引出</th><th>守护的不变量</th></tr>
+<tr class="link" data-j="0"><td>S0 朴素</td><td>能跑但缺失</td><td>5 行骨架</td><td>→ 何时停</td><td>—</td></tr>
+<tr class="link" data-j="1"><td>S1 停止</td><td>偷懒/停不下/截断</td><td>四类终止 + hook 否决 + 枚举</td><td>续命风险 → 工具细节</td><td>②</td></tr>
+<tr class="link" data-j="2"><td>S2 工具</td><td>并行冲突、危险操作</td><td>默认顺序、审批串行、result 保序</td><td>执行久 → 要能打断</td><td>②</td></tr>
+<tr class="link" data-j="3"><td>S3 打断</td><td>中止/转向</td><td>cancel + 补 aborted + steering</td><td>取消成常态 → 失败分流</td><td>②</td></tr>
+<tr class="link" data-j="4"><td>S4 失败</td><td>盲目重试</td><td>三分类 + one-shot + 签名去重</td><td>溢出无解 → 上下文</td><td>①</td></tr>
+<tr class="link" data-j="5"><td>S5 增长</td><td>装不下</td><td>投影层 + 主动为主 + 切点 + CCR</td><td>改写破缓存 → 算账</td><td>①②</td></tr>
+<tr class="link" data-j="6"><td>S6 缓存</td><td>前缀失效</td><td>append-mostly + 收益门 + id 永不复用</td><td>复杂 → 要验证</td><td>③</td></tr>
+<tr class="link" data-j="7"><td>S7 验证</td><td>怎么证明没坏</td><td>不变量/契约/对照</td><td>→ 放哪一层</td><td>全部</td></tr>
+<tr class="link" data-j="8"><td>S8 代理层</td><td>不能改客户端</td><td>两模式 + 内循环 + 不可碰清单</td><td>对账成本长期存在</td><td>①③</td></tr>
+</table></div>
+
+<h2>你的 LangGraph 经验怎么接进来</h2>
+<p><b>层级关系：</b>按官方文档，LangGraph 是低层的 runtime（durable execution、streaming、human-in-the-loop、持久化），LangChain 的 <code>create_agent</code> 建在它之上，Deep Agents 是更有主见的 harness（规划、子 agent、文件系统、上下文管理）。pi 是具体的 coding-agent runtime，所以 pi 的 loop 约等于 LangGraph 里 <code>create_agent</code> 那一层，而 LangGraph 额外提供显式的图与工作流层。<span class="tag">[文档]</span> 对照类比部分是我的判断。<span class="tag">[推断]</span> 详见第 8 章。</p>
+<div class="elev"><b>开场叙事模板（填入你真实的细节）</b><br>“我们的招聘 Agent 用 LangGraph 编排：〔你的流程节点〕。<b>流程已知用图，目标开放用 loop</b>，里面〔某个开放节点〕是个 ReAct 子循环。做下来发现图解决了编排和暂停恢复，<b>却没解决长任务的上下文增长</b>，所以我研究了 pi、codex 和一个做压缩的代理项目，接下来按‘朴素 loop 逐步打补丁’的顺序讲我的总结。”<br>→ 然后直接进入 S0。</div>
+</main>
+
+<script>
+(function(){
+var CAP=["S0：只有 History → Model → Tools 的闭环。","S1：新增停止策略，决定“是否再转一圈”。","S2：工具侧新增审批与并行。","S3：新增输入队列，从外部打断与转向。","S4：新增重试分流，溢出回到压缩。","S5：History 与 Model 之间插入投影/压缩层。","S6：虚线标出前缀稳定带，压缩需算收益账。","S7：新增验证层（不变量·ledger·e2e）。","S8：虚线框出代理层，整套逻辑放在客户端与上游之间。"];
+var cur=0,all=false;
+var steps=[].slice.call(document.querySelectorAll('.step')),nav=document.getElementById('nav'),btns=[];
+function exitAll(){if(all){all=false;document.getElementById('steps').classList.remove('all');document.getElementById('allb').setAttribute('aria-pressed',false)}}
+for(var i=0;i<=8;i++){(function(i){var b=document.createElement('button');b.textContent='S'+i;b.onclick=function(){exitAll();set(i)};nav.appendChild(b);btns.push(b)})(i)}
+var rb=document.createElement('button');rb.textContent='↺ 重置';rb.title='回到 S0 的初始状态';rb.onclick=function(){exitAll();set(0)};nav.appendChild(rb);
+var svgEls=[].slice.call(document.querySelectorAll('svg [data-s]'));
+function set(n){cur=Math.max(0,Math.min(8,n));
+steps.forEach(function(s){s.classList.toggle('on',+s.dataset.s===cur)});
+btns.forEach(function(b,i){b.setAttribute('aria-pressed',i===cur)});
+svgEls.forEach(function(e){var s=+e.dataset.s,show=all||s<=cur;e.classList.toggle('vis',show);
+if(e.classList.contains('bx')||e.classList.contains('ln')){e.classList.toggle('new',!all&&s===cur&&cur>0)}});
+document.getElementById('cap').textContent=all?"全貌：把所有部件放在一起。":CAP[cur];
+document.getElementById('prev').disabled=cur===0;document.getElementById('next').disabled=cur===8;
+var direct=document.getElementById('direct');if(direct){direct.style.display=(cur>=5||all)?'none':'inline'}
+}
+document.getElementById('prev').onclick=function(){exitAll();set(cur-1);top1()};
+document.getElementById('next').onclick=function(){exitAll();set(cur+1);top1()};
+function top1(){document.getElementById('nav').scrollIntoView({behavior:'smooth',block:'start'})}
+var ab=document.getElementById('allb');
+ab.onclick=function(){all=!all;document.getElementById('steps').classList.toggle('all',all);ab.setAttribute('aria-pressed',all);set(cur)};
+[].forEach.call(document.querySelectorAll('tr.link'),function(r){r.onclick=function(){if(all){all=false;document.getElementById('steps').classList.remove('all');ab.setAttribute('aria-pressed',false)}set(+r.dataset.j);top1()}});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'){exitAll();set(cur+1)}if(e.key==='ArrowLeft'){exitAll();set(cur-1)}if(e.key==='Escape'){exitAll();set(0)}});
+set(0);
+})();
+</script>
