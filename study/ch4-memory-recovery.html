@@ -1,0 +1,124 @@
+<title>记忆与恢复演进讲法</title>
+<main>
+<h1>记忆与恢复：一条演进主线</h1>
+<p class="sub">同前几章的讲法：从“状态只在内存里”出发，遇到问题加补丁，补丁带来新代价。<span class="tag">[代码]</span> 读过源码 <span class="tag">[推断]</span> 我的判断 <span class="tag">[文档]</span> 公开行为 <span class="tag">[论文]</span> 作者自报</p>
+
+<div class="elev"><b>60 秒电梯版（开场就说这段）</b><br>
+“Agent 的‘记忆’要分三层讲：<b>会话状态</b>（进程重启后还能接着干）、<b>压缩状态</b>（摘要块和原文索引）、<b>长期规则</b>（跨压缩甚至跨会话的约束）。我按演进讲：最朴素是<b>状态放内存</b>，重启就丢，客户端重发超长历史会直接被模型拒绝；于是<b>落盘</b>，用<b>原子写 + 防抖</b>；然后要决定<b>存什么</b>（只存折叠后的状态，不存全量历史）；会话<b>身份</b>用客户端原值，不自己造；内存做<b>有界缓存</b>、磁盘为准；多进程会<b>回滚写</b>，所以加单调守卫；客户端自己压缩后要<b>归档并保住引用号高水位</b>；最后用受保护的 <b>acp_rule</b> 让规则跨压缩存活。每一步我都能说清取舍和没做的部分。”</div>
+
+<h2>三条贯穿全程的不变量</h2>
+<div class="inv">
+<div><p><b>① 磁盘为准</b><br>内存只是有界缓存，淘汰前先落盘，重载后行为一致。</p></div>
+<div><p><b>② 写不回滚</b><br>原子写、单调守卫，宁可保留较新的状态也不覆盖。</p></div>
+<div><p><b>③ 号码不复用</b><br>恢复、归档、fork 之后引用号仍只增不减。</p></div>
+</div>
+
+<h2>演进图（随步骤逐步长出来）</h2>
+<div class="nav" id="nav"></div>
+<figure><div class="scrollx">
+<svg viewBox="0 0 760 340" width="760" role="img" aria-label="记忆与恢复数据流：会话内存、防抖原子写、磁盘、内容存储、身份、重载、守卫、归档、规则">
+<defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs>
+<g marker-end="url(#ar)">
+<path class="ln" data-s="0" d="M106 168 H132"/>
+<path class="ln" data-s="1" d="M228 168 H254"/>
+<path class="ln" data-s="1" d="M350 168 H376"/>
+<path class="ln" data-s="2" d="M424 196 V250"/>
+<path class="ln" data-s="3" d="M180 250 V196"/>
+<path class="ln" data-s="4" d="M498 168 H472"/>
+<path class="ln" data-s="4" d="M546 140 V100 H180 V140"/>
+<path class="ln" data-s="5" d="M302 250 V196"/>
+<path class="ln" data-s="6" d="M546 250 V226 H212 V196"/>
+<path class="ln" data-s="7" d="M668 250 V120 H204 V140"/>
+</g>
+<text class="lbl" data-s="1" x="232" y="160">防抖写</text>
+<text class="lbl" data-s="4" x="560" y="94">LRU 淘汰后重载</text>
+<text class="lbl" data-s="2" x="432" y="226">originals</text>
+<g class="bx" data-s="0"><rect x="10" y="140" width="96" height="56" rx="8"/><text class="t" x="20" y="162">客户端</text><text x="20" y="182">重发历史</text></g>
+<g class="bx" data-s="0"><rect x="132" y="140" width="96" height="56" rx="8"/><text class="t" x="142" y="162">Session</text><text x="142" y="182">内存状态</text></g>
+<g class="bx" data-s="1"><rect x="254" y="140" width="96" height="56" rx="8"/><text class="t" x="264" y="162">写队列</text><text x="264" y="182">temp+rename</text></g>
+<g class="bx" data-s="1"><rect x="376" y="140" width="96" height="56" rx="8"/><text class="t" x="386" y="162">磁盘 JSON</text><text x="386" y="182">信封 v3</text></g>
+<g class="bx" data-s="2"><rect x="376" y="250" width="96" height="52" rx="8"/><text class="t" x="386" y="272">内容存储</text><text x="386" y="290">sidecar</text></g>
+<g class="bx" data-s="3"><rect x="132" y="250" width="96" height="52" rx="8"/><text class="t" x="142" y="272">会话身份</text><text x="142" y="290">客户端原值</text></g>
+<g class="bx" data-s="4"><rect x="498" y="140" width="96" height="56" rx="8"/><text class="t" x="508" y="162">启动/重载</text><text x="508" y="182">mergeState</text></g>
+<g class="bx" data-s="5"><rect x="254" y="250" width="96" height="52" rx="8"/><text class="t" x="264" y="272">陈旧守卫</text><text x="264" y="290">单调计数</text></g>
+<g class="bx" data-s="6"><rect x="498" y="250" width="96" height="52" rx="8"/><text class="t" x="508" y="272">边界归档</text><text x="508" y="290">ref floor</text></g>
+<g class="bx" data-s="7"><rect x="620" y="250" width="96" height="52" rx="8"/><text class="t" x="630" y="272">acp_rule</text><text x="630" y="290">受保护规则</text></g>
+<g data-s="8"><text x="372" y="124" font-size="12" fill="var(--acc)" font-weight="700">codec：zstd / AES-GCM</text></g>
+</svg></div>
+<figcaption id="cap"></figcaption></figure>
+
+<div class="nav" style="position:static;border:0;padding:0"><button id="prev">← 上一步</button><button id="next">下一步 →</button><span class="sp"></span><button id="allb" aria-pressed="false">全文连读</button></div>
+<div id="steps">
+<section class="step" data-s="0"><h2>M0 · 最朴素：状态放进程内存</h2>
+<div class="row"><h3>痛点</h3><ul><li>代理重启（升级、崩溃）后，所有折叠状态消失。</li><li>更糟的是：会话原始历史已经超出模型窗口，客户端下一轮又<b>全量重发</b>，没有摘要块可折叠，请求被模型直接拒绝，会话<b>永久卡死</b>。<span class="tag">[代码]</span></li></ul><h3>结论</h3><p>代理型架构里，压缩状态是<b>不可再生的</b>：客户端只带原文，不带“折叠过什么”。所以它必须持久化。</p></div><div class="say"><span class="k">怎么说：</span>先把问题定性：这不是“丢个缓存”，而是<b>代理持有了客户端没有的状态</b>。只要代理替客户端折叠了历史，重启后这份折叠关系就是唯一能让超长历史重新变小的东西。持久化在这里是正确性问题，不是优化。</div><div class="bridge"><span class="k">过渡句：</span>“那就写盘；但怎么写，崩在写一半怎么办？”</div>
+</section>
+<section class="step" data-s="1"><h2>M1 · 落盘：原子写 + 防抖</h2>
+<div class="row"><h3>痛点</h3><ul><li>每次状态变化都同步写盘会拖慢热路径；</li><li>进程在写到一半被杀，留下半个文件，下次加载读到坏数据。</li></ul><h3>补丁</h3><ul><li><b>temp 文件 + rename</b>（posix 上 rename 原子），写一半崩溃只会留下临时文件，加载时被丢弃。<span class="tag">[代码]</span></li><li><b>防抖</b>：默认 500ms 合并多次保存，且<b>写入时才构建记录</b>，落盘的是最新状态。<span class="tag">[代码]</span></li><li>每个会话一条写链，串行化；瞬时文件系统错误（Windows 的 EPERM/EBUSY 等）整轮带退避重试。<span class="tag">[代码]</span></li><li>优雅退出（SIGTERM/SIGINT）和重启路径调用 flushAll 刷出待写。<span class="tag">[代码]</span></li></ul><h3>新代价</h3><p>没有 fsync，<b>断电会丢最近一个防抖窗口</b>；进程崩溃安全，断电不安全。源码注释里自己写明了这条限制。<span class="tag">[代码]</span></p></div><div class="say"><span class="k">怎么说：</span>我讲的是“<b>进程崩溃安全，不是断电安全</b>”。这是有意的取舍：状态可由客户端重发部分重建，最坏是多花一轮压缩，没必要为每次写付 fsync 的延迟。机制放在 kernel 的 StateStore（原子写、重试、防抖、容错加载），宿主只管策略，这样别的宿主也能复用。</div><div class="cmp"><div><b>pi</b>会话是<b>追加写 JSONL</b>：每条 entry 一行，appendFileSync，天然只增不改；加载时跳过损坏的行。<span class="tag">[代码]</span></div><div><b>codex</b>rollout 也是 JSONL 追加；另有跨进程的 thread writer lock，保证同一线程只有一个写者。<span class="tag">[代码]</span></div><div><b>本项目</b>整份 JSON 重写（temp+rename），因为存的是<b>可变状态</b>而不是事件流。<span class="tag">[代码]</span></div><div><b>LangGraph</b>checkpointer 在每个 super-step 保存一份 checkpoint，按 thread_id 索引；快照含 values、next、metadata、parent_config；<code>durability</code> 可选 exit / async / sync，决定何时落盘。<span class="tag">[文档]</span></div><div><b>Claude Code</b>会话转录以 JSONL 存在本地，支持 --resume / --continue。<span class="tag">[文档]</span></div></div><details><summary>追问：为什么不像 pi 那样追加写？</summary><p>追加写适合<b>事件流</b>（消息只增）。本项目要存的是 CompressionState（块的激活/失活、引用表、计数器），会被原地修改，追加写要么变成事件溯源，要么需要定期压实。整份原子重写更简单，代价是写放大，所以用防抖兜住。<span class="tag">[推断]</span></p></details><div class="bridge"><span class="k">过渡句：</span>“写盘的机制定了，下一个问题是：到底存什么？”</div>
+</section>
+<section class="step" data-s="2"><h2>M2 · 存什么：折叠状态，不存全量历史</h2>
+<div class="row"><h3>痛点</h3><ul><li>全量原始历史重复了客户端本来就会重发的内容，实测占语料很大比例（源码注释写约 63%）。<span class="tag">[代码]</span></li><li>版本演进：加字段后旧文件不能读不出来。</li></ul><h3>补丁</h3><ul><li>记录 = <b>信封</b> {version, savedAt, id, payload}，当前 PERSIST_VERSION=3；旧的无信封文件通过 legacy hook 收养，下次写时迁移。<span class="tag">[代码]</span></li><li>payload 存 CompressionState、blockContents（折叠范围的原文）、以及<b>折叠后视图的尾部快照</b>（默认只留最新约 16384 token），不存全量原始历史。<span class="tag">[代码]</span></li><li><b>mergeState</b>：加载时把缺失字段补成默认值，所以加字段向前兼容，不需要显式迁移。<span class="tag">[代码]</span></li><li>CCR 的原文放在<b>独立 sidecar 文件</b>，与会话 JSON 同命名空间、同 codec，按需懒加载，保持会话记录小。<span class="tag">[代码]</span></li><li>文件按“协议/上游主机_哈希”分目录，人能一眼分辨。<span class="tag">[代码]</span></li></ul></div><div class="say"><span class="k">怎么说：</span>核心判断是<b>只存客户端无法重建的东西</b>：折叠关系、引用表、摘要对应的原文。原始历史客户端每轮都重发，存它既浪费又会过期。向前兼容我靠“加载时合并默认值”而不是版本迁移链，因为这个状态都是可加字段的，省掉了迁移代码的维护。代价是语义变化的字段不能这样处理，那时仍要版本号。</div><div class="cmp"><div><b>pi</b>存<b>完整</b>会话（所有 entry，树结构 id/parentId），压缩是树上的一个 compaction entry；版本迁移 v1→v2→v3 是显式函数。<span class="tag">[代码]</span></div><div><b>codex</b>rollout 是完整事件日志；压缩检查点作为历史条目保存，取最新一个可用的。<span class="tag">[代码]</span></div><div><b>本项目</b>只存折叠后的状态和原文索引；不存完整原始历史。<span class="tag">[代码]</span></div><div><b>LangGraph</b>短期记忆就是 state 里的 messages，由 checkpointer 持久化；裁剪或摘要通过中间件改写，摘要会永久替换旧消息。<span class="tag">[文档]</span></div></div><details><summary>追问：不存原始历史，导出/审计怎么办？</summary><p>折叠范围的原文仍在 blockContents 里；尾部快照提供近期上下文；二者合起来能做“折叠视图”导出。要完整审计应以客户端自己的转录为准，这是代理型架构的边界。<span class="tag">[推断]</span></p></details><div class="bridge"><span class="k">过渡句：</span>“状态落盘后，文件名和键怎么定？这就是身份问题。”</div>
+</section>
+<section class="step" data-s="3"><h2>M3 · 身份：用客户端原值，不自己造</h2>
+<div class="row"><h3>痛点</h3><ul><li>用凭证、模型、上游做哈希当 id，用户一切换就“换了人”，状态孤立；</li><li>内容指纹兜底有碰撞面，会把两个会话并到一起。</li></ul><h3>补丁</h3><ul><li><b>会话 id = 客户端给的会话标识原值</b>（各客户端的 session 头、Responses 的 session_id / prompt_cache_key 等），不掺其它维度。<span class="tag">[代码]</span></li><li>协议切换也安全：状态是协议中立的，历史由当前协议适配器重新归一化。<span class="tag">[代码]</span></li><li>没有客户端标识的请求走<b>前缀亲和（prefix-affinity）</b>：按请求内容的哈希链归属会话，哈希链太短（规范化后不足 24 字节）时不参与匹配。<code>session-id.ts</code> 的注释还写着“无标识直接 400”，但我在 <code>server.ts</code> 里没找到对应的 400 分支，注释看起来已过时。<span class="tag">[代码]</span></li><li>插件模式下由插件头声明会话；只有带插件标记头才信任，防止局域网客户端操控会话身份。<span class="tag">[代码]</span></li><li>个别宿主复用同一 id 给多个人格（如 dsh 自动审查），按“id + system 哈希”分叉，且是<b>证据白名单</b>，不全局开启。<span class="tag">[代码]</span></li></ul></div><div class="say"><span class="k">怎么说：</span>身份的原则是<b>绑定对话本身，而不是对话的易变属性</b>。凭证会轮换、用户会换中转和模型，这些都不该让压缩状态消失。所以直接用客户端声明的值，拿不到就拒绝，而不是猜。分叉那条要讲出判断：不是所有“system 变了”都是新人格，对其他宿主分叉会重置压缩，所以必须有流量证据才进白名单。</div><div class="cmp"><div><b>pi</b>会话 id 是自己生成的 UUIDv7，写在会话文件头；pi-durable 的每个对话也持久化一个 UUIDv7，并作为 sessionId 传给 provider 做缓存亲和。<span class="tag">[代码]</span></div><div><b>codex</b>线程 id（ThreadId）由自己持有并写入 rollout；它自己持有 history，不存在“猜 id”问题。<span class="tag">[推断]</span></div><div><b>本项目</b>代理不拥有对话，只能信任客户端头；这是代理形态的结构性代价。<span class="tag">[代码]</span></div></div><div class="bridge"><span class="k">过渡句：</span>“id 有了，内存里能放多少个会话？”</div>
+</section>
+<section class="step" data-s="4"><h2>M4 · 内存是缓存，磁盘为准</h2>
+<div class="row"><h3>痛点</h3><ul><li>长期运行的代理累积大量会话，内存无限增长；</li><li>启动时一次加载全部，积压多时可能撑爆内存。</li></ul><h3>补丁</h3><ul><li><b>内存池有上限</b>（MAX_SESSIONS）；淘汰最旧的非 in-flight 会话<b>前先落盘</b>，之后访问再重载。<span class="tag">[代码]</span></li><li>从未成功写过盘的会话，flush 失败时<b>不允许淘汰</b>（否则是永久丢失）。<span class="tag">[代码]</span></li><li>全部在飞行中且池满，抛错而不是强删。<span class="tag">[代码]</span></li><li>启动加载按“最近活跃”取最新的若干个；用 createdAt 与 lastSeen 的较大者，避免老会话但刚用过的被挤掉。<span class="tag">[代码]</span></li><li>重载后 restored 标记只在内存、不落盘，用来区分“启动恢复的陈旧”与“真实活跃”。<span class="tag">[代码]</span></li></ul></div><div class="say"><span class="k">怎么说：</span>这是经典的“内存缓存 + 持久层为准”。关键是两条保护：<b>没落过盘的不能淘汰</b>，<b>在飞行的不能淘汰</b>。恢复态的元信息故意不落盘，因为它描述的是“本进程的视角”，落盘会污染下一次启动。</div><div class="cmp"><div><b>pi</b>单会话进程模型：同一时刻只加载一个会话文件，没有淘汰问题。<span class="tag">[推断]</span></div><div><b>codex</b>线程由 session index / SQLite state DB 做元数据索引，内容在 rollout 文件。<span class="tag">[代码]</span></div><div><b>LangGraph</b>实现有 InMemorySaver（重启即丢）、SqliteSaver（开发）、PostgresSaver（生产）；checkpoint 会不断累积，需要自己清理。<span class="tag">[文档]</span></div></div><details><summary>追问：并发请求同一个会话怎么办？</summary><p>源码自己承认：会话内<b>没有请求级串行化</b>，两个并发请求可能交错 processTurn 而破坏内存状态，是已知限制，建议在宣称多 agent 并发安全前补每会话锁。<span class="tag">[代码]</span></p></details><div class="bridge"><span class="k">过渡句：</span>“如果有两个代理进程共用一个目录呢？”</div>
+</section>
+<section class="step" data-s="5"><h2>M5 · 多进程：陈旧写与单调守卫</h2>
+<div class="row"><h3>痛点</h3><ul><li>两个 bili 进程共享状态目录，谁后存谁赢；持有旧内存副本的一方会把计数器回滚（requests 3 → 2），摘要块也会丢。</li></ul><h3>补丁</h3><ul><li><b>单调守卫（#405）</b>：requests 与 nextBlockId 在同一会话上单调递增，写入前读盘比较，若自己更小就拒绝覆盖。<span class="tag">[代码]</span></li><li><b>读侧收敛（#2401）</b>：只保护磁盘还不够，陈旧一方会继续用旧折叠状态服务，被覆盖的内容重新进入线路、重复计费。所以保存时若判定磁盘更新，就把磁盘记录应用到内存会话（原地，保持对象身份），并丢弃引用旧谱系的待取回项。<span class="tag">[代码]</span></li><li>告警按 60 秒节流。<span class="tag">[代码]</span></li></ul><h3>没做的</h3><p><b>没有跨进程锁、没有选主</b>。落后一方的计数追平后会被判为新鲜，可能再次覆盖；文档给的建议是“一个状态目录只留一个服务实例”。<span class="tag">[代码]</span></p></div><div class="say"><span class="k">怎么说：</span>我会明确说这是<b>尽力而为的收敛，不是一致性协议</b>。用两个单调信号做“谁更新”的判据，成本极低，能挡住最常见的回滚。真正的多写者一致性需要锁或选主，设计上故意没做，把约束写进运维建议。能说出“残余窗口在哪”，比声称它是安全的更可信。</div><div class="cmp"><div><b>codex</b>显式 <b>writer lock</b>：同一 Codex home 内一个线程同一时刻一个写者，锁文件放在 thread-writer-locks 目录。<span class="tag">[代码]</span></div><div><b>pi</b>追加写 + 单进程假设，没看到跨进程协调；pi-durable 提供 SQLite 存储，事务由后端保证。<span class="tag">[推断]</span></div><div><b>LangGraph</b>同一 super-step 里并行写同一个 key 必须有 reducer，否则抛 <code>InvalidUpdateError</code>；节点中途失败时，同 super-step 里已完成节点的输出作为 pending writes 保存，恢复时不重跑。<span class="tag">[文档]</span></div></div><div class="bridge"><span class="k">过渡句：</span>“进程间的问题说完了。还有一类‘外部改写’：客户端自己把历史压缩了。”</div>
+</section>
+<section class="step" data-s="6"><h2>M6 · 外部改写后的恢复：归档与引用号高水位</h2>
+<div class="row"><h3>痛点</h3><ul><li>客户端做了<b>原生 compaction</b>（如 /compact），历史变短，会话 id 却不变；旧块对应的原文已被客户端摘要替换，若继续当作有效块，折叠会错位。</li><li>清理引用表时，内核的游标是“当前最大号 + 1”，把高位号码删掉就会<b>重新分配已用过的号</b>，摘要里引用它会静默指错。</li></ul><h3>补丁</h3><ul><li>先标记边界，下一轮 processTurn 之后再 <b>applyCompactionArchive</b>：被失活的块记入 preCompactionArchive（原因：被客户端原生 compaction 替换），引用映射收缩到仍然存活的原文 id。<span class="tag">[代码]</span></li><li>收缩时用一个合成键 <code>bili:ref-floor</code> 把<b>旧高水位</b>钉住，保证游标不回退。<span class="tag">[代码]</span></li><li>fork/恢复时同样用 reserveRefsThrough 抬高下限。<span class="tag">[代码]</span></li><li>身份与对账的整体机制见第 3 章 K7；这里只讲落盘侧。</li><li>另有“僵尸块”清理：覆盖的原文被客户端销毁后，块被<b>移除</b>而非仅失活，否则会被同步逻辑复活并每轮闪烁。<span class="tag">[代码]</span></li></ul></div><div class="say"><span class="k">怎么说：</span>这里体现的是<b>身份不变量的维护成本</b>：想收缩映射省空间，却不能让号码被复用。解法是“收缩 + 钉高水位”。AGENTS.md 把这块列为已知残余窗口：理论上仍有重新分配的可能，等 kernel 的引用空间加宽后可去掉收缩。主动承认残余风险是加分项。</div><div class="cmp"><div><b>pi</b>compaction 是会话树上的一个 entry；原文仍在文件里，视图由“沿叶到根的路径”构建，无需归档。<span class="tag">[代码]</span></div><div><b>codex</b>compaction 检查点是 rollout 里的一条；只有带 replacement_history 与 window_number 的才能当边界，否则回放整个 rollout，不停在更旧的检查点上。<span class="tag">[代码]</span></div><div><b>本项目</b>代理要对账客户端的改写，所以需要显式归档与高水位。<span class="tag">[代码]</span></div></div><details><summary>追问：为什么用合成键而不是单独存一个计数器？</summary><p>因为内核游标由映射本身推导（最大号 + 1），宿主不能改内核。把高水位编码成映射里的一个永不匹配真实消息的键，就能在不改 kernel 的前提下影响游标。这是在宿主侧绕开 kernel 修改门槛的做法。<span class="tag">[推断]</span></p></details><div class="bridge"><span class="k">过渡句：</span>“到现在讲的都是‘会话内’的记忆。用户要的往往是：我说过的规矩，压缩之后还得记着。”</div>
+</section>
+<section class="step" data-s="7"><h2>M7 · 长期规则：acp_rule 跨压缩存活</h2>
+<div class="row"><h3>痛点</h3><ul><li>用户反复纠正的行为、项目约束，在压缩时可能连同旧消息一起被摘要吞掉。</li></ul><h3>补丁</h3><ul><li><b>acp_rule 工具</b>（需开启 <code>compress.rules</code>，kernel 与 bili 默认都不启用）：模型把简短、原则级的提醒记录进状态；每轮由适配器把规则渲染进<b>系统提示</b>重新注入。<span class="tag">[代码]</span></li><li><b>硬保护</b>：<code>compress</code> 与 <code>acp_rule</code> 的调用和结果永不被压缩（ALWAYS_PROTECTED_TOOLS）。<span class="tag">[代码]</span></li><li>有界：默认最多 50 条、每条 300 字符，可由配置覆盖；规则 id 单调（ruleN）。<span class="tag">[代码]</span></li><li>规则存在 CompressionState 里，所以<b>随 M1/M2 的同一条持久化链</b>落盘，重启后还在（mergeState 里有 rules 与 nextRuleId）。<span class="tag">[代码]</span></li></ul><h3>边界</h3><p>这是<b>会话级</b>规则，不是跨会话的长期记忆；没有检索，也不会自动提炼。<span class="tag">[推断]</span></p></div><div class="say"><span class="k">怎么说：</span>我把它讲成“<b>把重要信息从会随压缩衰减的对话里，搬到一条不会被压缩的通道</b>”。通道有两点：受保护的工具调用，加每轮重新注入系统提示。限额是刻意的：规则越多，系统提示越长，缓存和注意力成本越高。跨会话的记忆本项目没做，业界做法见对比。</div><div class="cmp"><div><b>pi</b>项目指令来自 AGENTS.md / CLAUDE.md 等文件（按优先级查找，AGENTS.override.md 优先），是<b>文件型</b>持久规则，由用户维护。<span class="tag">[代码]</span></div><div><b>codex</b>独立的 <b>memories</b> 流水线：会话启动时后台两阶段，Phase 1 逐 rollout 抽取 raw_memory 与摘要，Phase 2 全局合并成文件，读取侧按 usage_count 排序并忽略过久未用的；生成时做秘密脱敏，任务在状态库里租约认领。<span class="tag">[代码]</span></div><div><b>Claude Code</b>CLAUDE.md 文件型记忆，加较新的自动记忆功能。<span class="tag">[文档]</span></div><div><b>LangGraph</b>Store 是跨 thread 的长期记忆：namespace 元组 + key 的 JSON 文档，put / get / search；语义检索需配置 embedding 索引；开发用 InMemoryStore，生产用 PostgresStore 等。<span class="tag">[文档]</span></div><div><b>本项目</b>会话内、受保护、可落盘的短规则；非跨会话。<span class="tag">[代码]</span></div></div><details><summary>追问：为什么不直接让规则放在用户消息里？</summary><p>用户消息会被折叠；放系统提示则位置稳定，不进入折叠范围，也更利于前缀缓存的稳定。代价是规则一变，系统提示这一段的缓存就失效，所以规则条数与长度要限。<span class="tag">[推断]</span></p></details><div class="bridge"><span class="k">过渡句：</span>“最后补上落盘的安全与存储形态：这些文件里有什么，谁能读？”</div>
+</section>
+<section class="step" data-s="8"><h2>M8 · 静态保护与存储演进，及证据</h2>
+<div class="row"><h3>痛点</h3><ul><li>会话文件含对话内容摘要和原文，放在磁盘上就是敏感数据；体积也会增长。</li></ul><h3>补丁</h3><ul><li><b>codec 钩子</b>：可选 zstd 压缩（默认关，owner 决策）和 AES-256-GCM 加密（密钥仅来自环境变量 32 字节，无效值启动即失败，不静默裸奔）；两者可独立开关。<span class="tag">[代码]</span></li><li>旧明文文件<b>启动时不重写</b>（保降级安全），下次保存时自然转换。<span class="tag">[代码]</span></li><li>实验中的<b>统一存储</b>侧车（SQLite index.db）：双写并对账，可从 legacy 回退；开启加密时侧车<b>拒绝启用</b>，因为它会存明文。<span class="tag">[代码]</span></li><li>已有“副本/检查点”接口（createReplica / restoreReplica），可冻结与恢复会话记录。<span class="tag">[代码]</span></li></ul><h3>证据强度</h3><p>机制层有大量注释化的缺陷编号与回归测试可对照；<b>我没有跑过崩溃注入或多进程压力实验</b>，下面这些结论是读码所得。<span class="tag">[推断]</span></p></div><div class="say"><span class="k">怎么说：</span>密钥只走环境变量，是因为密钥文件和数据在同一块不可信磁盘上等于没加密。侧车拒绝与加密共存，体现的是<b>宁可功能降级也不泄露明文</b>。如果重做：我会补崩溃注入测试（在写链各阶段杀进程），把多进程换成显式锁或单实例检测，并考虑把规则从会话级升到可选的跨会话存储。</div><div class="cmp"><div><b>pi</b>会话文件明文 JSONL；pi-durable 提供 SQLite/JSONL 两种存储后端。<span class="tag">[代码]</span></div><div><b>codex</b>rollout 目录另有压缩子模块与 SQLite state DB 索引。<span class="tag">[代码]</span></div></div>
+</section>
+</div>
+
+<h2>一页复习卡</h2>
+<p class="sub">点任意一行跳到对应步骤。</p>
+<div class="scrollt"><table id="tbl">
+<tr><th>步骤</th><th>痛点</th><th>补丁</th><th>新代价 → 引出</th><th>不变量</th></tr>
+<tr class="link" data-j="0"><td>M0 内存</td><td>重启丢状态，超长历史被拒</td><td>—</td><td>→ 要持久化</td><td>①</td></tr>
+<tr class="link" data-j="1"><td>M1 落盘</td><td>写慢、写一半崩</td><td>temp+rename、防抖、flush</td><td>断电丢一个窗口 → 存什么</td><td>②</td></tr>
+<tr class="link" data-j="2"><td>M2 内容</td><td>历史重复、版本演进</td><td>只存折叠状态、信封、mergeState、sidecar</td><td>→ 键怎么定</td><td>①</td></tr>
+<tr class="link" data-j="3"><td>M3 身份</td><td>派生哈希漂移</td><td>客户端原值、无标识走前缀亲和、证据白名单分叉</td><td>代理形态的代价 → 内存</td><td>①</td></tr>
+<tr class="link" data-j="4"><td>M4 缓存</td><td>内存无界</td><td>有界池、淘汰前落盘、未落盘不淘汰</td><td>无请求级锁 → 多进程</td><td>①</td></tr>
+<tr class="link" data-j="5"><td>M5 多进程</td><td>陈旧写回滚</td><td>单调守卫、读侧收敛</td><td>无锁无选主 → 外部改写</td><td>②</td></tr>
+<tr class="link" data-j="6"><td>M6 归档</td><td>客户端原生压缩、号码复用</td><td>archive、ref floor、僵尸块移除</td><td>残余窗口 → 规则</td><td>③</td></tr>
+<tr class="link" data-j="7"><td>M7 规则</td><td>约束被压缩吞掉</td><td>acp_rule、受保护、系统提示注入、限额</td><td>仅会话级 → 安全</td><td>③</td></tr>
+<tr class="link" data-j="8"><td>M8 安全</td><td>磁盘上是敏感数据</td><td>zstd/AES-GCM、侧车拒绝明文</td><td>—</td><td>全部</td></tr>
+</table></div>
+</main>
+
+<script>
+(function(){
+var CAP=["M0：状态只在 Session 内存里。","M1：新增防抖写队列与磁盘 JSON（原子写）。","M2：新增内容存储 sidecar，只存折叠状态。","M3：新增会话身份：客户端原值。","M4：新增启动/重载，内存有界、磁盘为准。","M5：新增陈旧守卫，防止多进程回滚。","M6：新增边界归档与引用号高水位。","M7：新增受保护的 acp_rule 规则通道。","M8：写盘链路加入 codec：压缩与加密。"];
+var cur=0,all=false;
+var steps=[].slice.call(document.querySelectorAll('.step')),N=steps.length-1,nav=document.getElementById('nav'),btns=[];
+function exitAll(){if(all){all=false;document.getElementById('steps').classList.remove('all');document.getElementById('allb').setAttribute('aria-pressed',false)}}
+for(var i=0;i<=N;i++){(function(i){var b=document.createElement('button');b.textContent='M'+i;b.onclick=function(){exitAll();set(i)};nav.appendChild(b);btns.push(b)})(i)}
+var rb=document.createElement('button');rb.textContent='↺ 重置';rb.onclick=function(){exitAll();set(0)};nav.appendChild(rb);
+var svgEls=[].slice.call(document.querySelectorAll('svg [data-s]'));
+function set(n){cur=Math.max(0,Math.min(N,n));
+steps.forEach(function(s){s.classList.toggle('on',+s.dataset.s===cur)});
+btns.forEach(function(b,i){b.setAttribute('aria-pressed',i===cur)});
+svgEls.forEach(function(e){var s=+e.dataset.s,show=all||s<=cur;
+if(e.dataset.h&&(all||cur>=+e.dataset.h))show=false;
+e.classList.toggle('vis',show);
+if(e.classList.contains('bx')||e.classList.contains('ln')){e.classList.toggle('new',!all&&s===cur&&cur>0)}});
+document.getElementById('cap').textContent=all?"全貌：把所有环节放在一起。":CAP[Math.min(cur,CAP.length-1)];
+document.getElementById('prev').disabled=cur===0;document.getElementById('next').disabled=cur===N}
+function top1(){document.getElementById('nav').scrollIntoView({behavior:'smooth',block:'start'})}
+document.getElementById('prev').onclick=function(){exitAll();set(cur-1);top1()};
+document.getElementById('next').onclick=function(){exitAll();set(cur+1);top1()};
+var ab=document.getElementById('allb');
+ab.onclick=function(){all=!all;document.getElementById('steps').classList.toggle('all',all);ab.setAttribute('aria-pressed',all);set(cur)};
+[].forEach.call(document.querySelectorAll('tr.link'),function(r){r.onclick=function(){exitAll();set(+r.dataset.j);top1()}});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'){exitAll();set(cur+1)}if(e.key==='ArrowLeft'){exitAll();set(cur-1)}if(e.key==='Escape'){exitAll();set(0)}});
+set(0);
+})();
+</script>

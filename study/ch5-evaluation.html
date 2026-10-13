@@ -1,0 +1,163 @@
+<title>评估演进讲法</title>
+<main>
+<h1>评估：怎么证明一个压缩代理“对”且“有效”</h1>
+<p class="sub">同前几章的讲法：从“手点几轮看看”出发，遇到问题加补丁，补丁带来新代价，代价引出下一步。核心区分：<b>机制正确性</b>（可以确定性证明）与<b>效果有效性</b>（只能统计性论证）。<span class="tag">[代码]</span> 读过源码 <span class="tag">[推断]</span> 我的判断 <span class="tag">[文档]</span> 公开行为 <span class="tag">[论文]</span> 作者自报</p>
+
+<div class="elev"><b>60 秒电梯版（开场就说这段）</b><br>
+“评估要分两类问题。<b>机制正确</b>：压缩后会不会改坏字节、复用 id、被上游 400 拒绝——这类是确定性的，所以用<b>不变量测试、契约/golden、字节级 prover、fuzz、甚至 Z3 定理</b>去钉死，而且每次线上事故都变成<b>只增不减的回归账本</b>。<b>真实行为</b>：mock 测不出真实客户端的 UA、重试和 wire 怪癖，所以有<b>真实客户端 e2e</b>，但它贵，所以默认关、只在改请求管线时跑，CI 按路径分层触发。<b>效果有效</b>：能省多少、会不会丢信息，这要靠<b>对照实验</b>——固定任务集、多臂、带召回探针，并且<b>归因要拆</b>。最后一条原则：<b>证据强度要如实标注</b>，生产观察和受控试点不是一回事，作者自报也不是第三方复现。”</div>
+
+<h2>三条贯穿全程的不变量</h2>
+<div class="inv">
+<div><p><b>① 能证明的别靠看</b><br>确定性性质（字节稳定、id 不复用）用测试甚至定理，不用目测。</p></div>
+<div><p><b>② 事故变账本</b><br>每个线上拒绝或事故都变成永久用例，账本只增不减。</p></div>
+<div><p><b>③ 证据要分级</b><br>机制证明、受控试点、生产观察，强度不同，报告时分开说。</p></div>
+</div>
+
+<h2>演进图（随步骤逐步长出来）</h2>
+<div class="nav" id="nav"></div>
+<figure><div class="scrollx">
+<svg viewBox="0 0 760 340" width="760" role="img" aria-label="评估体系随步骤逐步增加不变量测试、契约账本、prover 与 fuzz、真实客户端 e2e、CI 分层、结果评估、A/B 与证据分级">
+<defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs>
+<g marker-end="url(#ar)">
+<path class="ln" data-s="1" d="M106 168 H132"/>
+<path class="ln" data-s="2" d="M228 168 H254"/>
+<path class="ln" data-s="3" d="M350 168 H376"/>
+<path class="ln" data-s="4" d="M472 168 H498"/>
+<path class="ln" data-s="5" d="M302 196 V250"/>
+<path class="ln" data-s="6" d="M424 196 V250"/>
+<path class="ln" data-s="7" d="M546 196 V250"/>
+<path class="ln" data-s="8" d="M668 196 V250"/>
+</g>
+<text class="lbl" data-s="5" x="310" y="226">路径触发</text>
+<text class="lbl" data-s="6" x="432" y="226">任务结果</text>
+<text class="lbl" data-s="7" x="554" y="226">多臂对照</text>
+<text class="lbl" data-s="8" x="676" y="226">分级</text>
+<g class="bx" data-s="0"><rect x="10" y="140" width="96" height="56" rx="8"/><text class="t" x="20" y="162">手点试跑</text><text x="20" y="182">看着没问题</text></g>
+<g class="bx" data-s="1"><rect x="132" y="140" width="96" height="56" rx="8"/><text class="t" x="142" y="162">单元·不变量</text><text x="142" y="182">kernel + bili</text></g>
+<g class="bx" data-s="2"><rect x="254" y="140" width="96" height="56" rx="8"/><text class="t" x="264" y="162">契约·golden</text><text x="264" y="182">WC 账本</text></g>
+<g class="bx" data-s="3"><rect x="376" y="140" width="96" height="56" rx="8"/><text class="t" x="386" y="162">prover·fuzz</text><text x="386" y="182">字节·定理</text></g>
+<g class="bx" data-s="4"><rect x="498" y="140" width="96" height="56" rx="8"/><text class="t" x="508" y="162">真实客户端</text><text x="508" y="182">e2e·默认关</text></g>
+<g class="bx" data-s="5"><rect x="254" y="250" width="96" height="52" rx="8"/><text class="t" x="264" y="272">CI 分层</text><text x="264" y="290">守卫·路径</text></g>
+<g class="bx" data-s="6"><rect x="376" y="250" width="96" height="52" rx="8"/><text class="t" x="386" y="272">结果评估</text><text x="386" y="290">轨迹·哨兵</text></g>
+<g class="bx" data-s="7"><rect x="498" y="250" width="96" height="52" rx="8"/><text class="t" x="508" y="272">A/B 对照</text><text x="508" y="290">探针·归因</text></g>
+<g class="bx" data-s="8"><rect x="620" y="250" width="96" height="52" rx="8"/><text class="t" x="630" y="272">证据分级</text><text x="630" y="290">如实汇报</text></g>
+</svg></div>
+<figcaption id="cap"></figcaption></figure>
+
+<div class="nav" style="position:static;border:0;padding:0"><button id="prev">← 上一步</button><button id="next">下一步 →</button><span class="sp"></span><button id="allb" aria-pressed="false">全文连读</button></div>
+<div id="steps">
+
+<section class="step" data-s="0"><h2>E0 · 最朴素：手点几轮，感觉没问题</h2>
+<div class="say"><span class="k">怎么说：</span>最朴素的评估是自己用一阵、看看有没有出错。对普通应用够用，对压缩代理<b>不行</b>，因为它的失败模式有三个特点：<b>静默</b>（引用号被复用，没有报错只有错答案）、<b>低频</b>（只在某家上游的某种 wire 形态下才 400）、<b>昂贵</b>（缓存被悄悄打断，只体现在账单上）。这些都不是“用着觉得卡”能发现的。所以我把评估拆成两类问题，各用不同工具。</div>
+<div class="row"><h3>这个朴素版的洞</h3><ul><li>确定性性质（字节稳定、id 不复用）→ E1–E3</li><li>真实客户端的行为 mock 不出来 → E4</li><li>测试太多太贵，怎么跑 → E5</li><li>agent 的评估看结果还是看过程 → E6</li><li>压缩到底有没有用 → E7</li><li>数字怎么如实说 → E8</li></ul></div>
+<div class="bridge"><span class="k">过渡句：</span>“先从最便宜、最确定的一层开始：把不变量写成测试。”</div>
+</section>
+
+<section class="step" data-s="1"><h2>E1 · 不变量测试：把设计契约写成断言</h2>
+<div class="row"><h3>痛点</h3><ul><li>压缩逻辑被很多路径改写，改一处容易破坏另一处的隐含前提。</li><li>隐含前提只存在于人的脑子里，换人就丢。</li></ul><h3>补丁</h3><ul><li><b>kernel 有自己的单元套件</b>（<code>kernel/tests/</code>，约 94 个文件，涵盖 refs、tool-pairs、nudge、persist、terminal-escape 等），跑在 TS 源码上。</li><li><b>宿主有集成套件</b>（<code>tests/</code>，600 多个测试文件）；AGENTS.md 规定<b>两层都绿</b>才算完成。</li><li><b>把规则编号写成测试</b>：<code>unified-acp-invariants.test.ts</code> 里 I1–I4 四条硬规则——thinking 通道字节原样、模型 prose 可管理、写文件的 tool 参数字节原样、用户发的字节永不改写。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>我的做法是<b>把“不能做什么”写成带编号的不变量</b>，每条对应一个会真出事的后果：thinking 块有签名校验，改一个字节整个会话就废；tool 参数是用户意图，过滤了就悄悄损坏数据。这类规则靠 code review 守不住，必须变成会红的测试。代价是测试要跟着架构演进，所以我要求<b>测试里写明规则出处和 issue 编号</b>，将来想松动时能知道为什么当初这么定。</div>
+<div class="cmp"><div><b>pi</b>有 vitest 单元测试，另有独立的 <code>packages/evals</code> 做行为评估，二者分开。<span class="tag">[代码]</span></div><div><b>codex</b>以 Rust 集成测试为主，<code>core/tests/suite</code> 下约 240 个文件，用 mock 服务器喂 SSE 响应。<span class="tag">[代码]</span></div><div><b>本项目</b>kernel 与宿主两层套件；不变量带编号；宿主侧有 100 多个 <code>issue*.test.ts</code>，kernel 侧有 <code>regression-*.test.ts</code>，文件名即 issue/修复出处。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：为什么 kernel 要单独一套测试？</summary><p>kernel 是纯函数库、可独立发布，且是 human-only 评审层。它的单测直接跑源码、不依赖宿主，能把“kernel 自身错了”和“宿主接错了”分开定位。宿主套件再作为集成层兜住接缝。<span class="tag">[代码]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“不变量守住了内部，但外部还有一个不受我控制的对手：上游 provider 的校验。”</div>
+</section>
+
+<section class="step" data-s="2"><h2>E2 · 契约测试：把线上拒绝变成永久用例</h2>
+<div class="row"><h3>痛点</h3><ul><li>每家上游有自己的、文档不全的严格校验：Responses 的 item id 前缀、Anthropic 的 <code>cache_control</code> scope 顺序、thinking 模式要求回传 reasoning。</li><li>这些只在生产里以 400 的形式暴露，修完很容易回归。</li></ul><h3>补丁</h3><ul><li><b>校验对齐的 fake 上游</b>：<code>tests/wire-contract-fakes.ts</code> 实现各 wire 最严格的已知校验；转发出去的 body 必须被它接受。</li><li><b>WIRE_RULES 账本</b>：每条 <code>WC-xxx</code> 带规则摘要和<b>出处（provenance）</b>，目前 18 个条目（含 1 条 header 级规则），编号 WC-001 到 WC-016，其中 WC-013、WC-016 各被两条规则共用；新增拒绝必须在<b>修复 PR 里</b>加条目+校验+用例。</li><li><b>golden 快照</b>：<code>tests/golden/wire-contract/</code> 保存所有工具 schema，按规范化 LF 文本逐字节比较；重新生成必须在 PR 里说明理由。</li><li>四层：kernel 导出、bili 自己服务的面、插件 manifest、<b>真实转发矩阵</b>（脚本化客户端 → 代理 → fake 上游）。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>这里的原则是<b>“账本只增不减”</b>：每次线上被拒绝，不只是修，还要把约束本身编码进 fake 上游，这样之后<b>任何</b>改动再违反它都会红。账本的出处字段很关键——它记录“这条规则是从哪次事故学来的”，比如 WC-016（#2648）记录了一次真实的 400，还诚实写下了<b>修复边界</b>（只扫描 system 块、没覆盖 tools），因为没有流量证据就不扩大谓词。golden 的作用是让工具 schema 的任何漂移都<b>显式可见</b>，不能悄悄改。</div>
+<div class="cmp"><div><b>pi</b>没有对应的 provider 约束账本；兼容性由 provider 适配层和各 provider 的测试承担。<span class="tag">[推断]</span></div><div><b>codex</b>用 mock 服务器断言发出的请求形态，并有约 90 份 <code>.snap</code> 快照，把“请求上下文长什么样”做成可读快照。<span class="tag">[代码]</span></div><div><b>本项目</b>WIRE_RULES 账本 + 校验对齐 fake + golden；代理的转发形态是被测对象。<span class="tag">[代码]</span></div><div><b>LangGraph</b>框架层不负责 provider 线协议约束，这类契约测试需要自己做。<span class="tag">[推断]</span></div></div>
+<details><summary>追问：golden 快照会不会变成“改了就重新生成”的橡皮图章？</summary><p>会有这个风险，所以流程上加了<b>人为摩擦</b>：重新生成要运行专门脚本，PR 里必须写理由；账本和 kernel 的行为常量快照（<code>kernel.json</code>）都按“只增不减、需要说明”处理，并且 kernel 变更是 human-only 评审。这是靠流程而不是靠测试本身来防橡皮图章。<span class="tag">[代码]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“契约是点状的例子；对‘缓存永远不被打断’这种全称命题，例子再多也不够。”</div>
+</section>
+
+<section class="step" data-s="3"><h2>E3 · prover、fuzz 与定理：对全称命题要更强的手段</h2>
+<div class="row"><h3>痛点</h3><ul><li>“代理从不改写稳定字节”是一个<b>全称命题</b>，手写用例只能覆盖已想到的形状。</li><li>缓存被打断的 bug 一个接一个：每次都是人工发现了矩阵里没有的形状。</li></ul><h3>补丁（强度递增）</h3><ul><li><b>字节级 prover</b>（<code>cache-proof.test.ts</code>）：捕获四种 wire 的真实出站 body，比较<b>原始字节</b>而不是 JSON 元素，覆盖增长、重试、模型切换（双探针 A/B）、宿主改写、折叠、压缩视图替换等场景；允许变化的字节必须被<b>声明为 volatile carrier</b>，其它任何差异都失败。</li><li><b>属性式 fuzz</b>（<code>cache-seam-fuzz.test.ts</code>）：生成会话形状而非枚举；默认 3 个场景、固定种子 1592，<code>ACP_TEST_FUZZ=1</code> 放宽到 12 个；失败会打印种子便于复现。</li><li><b>Z3 定理</b>（<code>cache-theorem.test.ts</code> + <code>proof/spec</code>）：证明增长稳定性和 ref 单调；并故意做<b>变异</b>（改写稳定字节、归档后重置游标），要求求解器<b>必须找到反例</b>，证明定理不是空洞的。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>三者回答的是不同强度的问题。prover 把“没有打断缓存”变成<b>会红的字节断言</b>；fuzz 用生成代替枚举，找“矩阵里没有的形状”；定理则对<b>契约本身</b>做机器检查。我特别想强调两个诚实点：第一，定理证明的是<b>装配契约</b>，用 grounding 子测试把每条公理钉回真实代码，信任边界是写明的；第二，用<b>变异测试</b>确认证明不空洞——故意破坏一下，看检查器是否报警。另外 prover 里的 mock 上游兼做“理想前缀缓存计费裁判”，字节断言和计费命中率<b>互相印证</b>。</div>
+<div class="cmp"><div><b>pi</b>没看到字节级前缀稳定性的专门检查。<span class="tag">[推断]</span></div><div><b>codex</b>没看到对应的 fuzz/定理；快照测试在“给定输入看输出”的层面做回归。<span class="tag">[推断]</span></div><div><b>本项目</b>prover + fuzz + Z3 三层；无 z3 的机器上定理子测试单独跳过，CI 的 theorem lane 保证执行。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：形式化是不是过度工程？</summary><p>要看代价收益。本项目的核心卖点是<b>缓存稳定</b>，一次打断是账单级后果，且历史上反复出现（测试注释里有一串 issue 编号）。所以对这一条投入定理级别是合理的；对别的部分（比如摘要写得好不好）形式化没有意义，那是统计问题。<span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“这些都在我造的 mock 里。真实客户端有 UA、重试、wire 怪癖，mock 不到——需要真客户端。”</div>
+</section>
+
+<section class="step" data-s="4"><h2>E4 · 真实客户端 e2e：mock 测不到的才值得花钱</h2>
+<div class="row"><h3>痛点</h3><ul><li>真实客户端的行为（UA、重试循环、对 id 的回放方式）在 mock 里复现不出来；很多回归就出在这里。</li><li>但真模型 e2e 又贵又不稳定。</li></ul><h3>补丁：分层的 e2e</h3><ul><li><b>真 codex + 真上游</b>（<code>e2e-codex.test.ts</code>）：预热 → 负载增长 → ACP 压缩 → 纯度（压缩后召回早期事实，且<b>不得回显埋入的污染值</b>）→ 可选 forge。<b>默认跳过</b>，需 <code>ACP_TEST_E2E=1</code>，“never remove the gate”。</li><li><b>确定性设计</b>：负载增长靠客户端侧 <code>seq</code> 输出，<b>不依赖模型配合</b>；召回用<b>哨兵数字</b>，可程序判定。</li><li><b>真客户端 + 假上游</b>（<code>e2e-codex-fake</code>、native 系列）：零 token，进 CI。</li><li><b>hermetic 专项车道</b>：图像计费（<code>e2e-image-billing</code>，无网络无 token，约 1 秒，永远跑）、本地 verdaccio 的自更新链、release canary。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>我的 e2e 策略是<b>把不确定性挪出断言</b>：让增长由客户端侧确定性地产生（模型常常把 <code>seq</code> 的输出缩短），让召回用哨兵值而不是让另一个模型判卷。真模型的套件默认关、只在改请求管线时手动跑；日常 CI 靠“真客户端+假上游”和 hermetic 车道获得大部分信心。<b>release canary</b> 值得一提：它对刚发布的同一份代码打两个版本号（N−1 和 N）推到本地 registry，只验证<b>管道</b>——版本发现、下载、原地切换——而不验证载荷质量，职责分得很清楚。</div>
+<div class="cmp"><div><b>pi</b>evals 在 Docker 里跑真实 agent、真实模型，需要 <code>PI_PROVIDER</code> 和 <code>PI_MODEL</code>。<span class="tag">[代码]</span></div><div><b>codex</b>主要用 mock 服务器和 SSE 夹具做集成，不依赖真模型。<span class="tag">[代码]</span></div><div><b>本项目</b>三档：真模型（门控）、真客户端+假上游（CI）、hermetic（永远跑）。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：真模型 e2e 不稳定，断言失败了怎么办？</summary><p>先判断是机制问题还是模型问题。设计上把断言放在<b>可确定的量</b>上（usage 先涨后跌、日志里出现拦截记录、哨兵召回），模型层面的随机性只影响“是否合作压缩”，所以允许“模型主动压”或“代理自主 preflight 压”两条路径任一发生。<span class="tag">[代码]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“测试越多越贵，下一个问题是：什么改动该跑哪些测试？”</div>
+</section>
+
+<section class="step" data-s="5"><h2>E5 · CI 分层：按改动路径配置成本</h2>
+<div class="row"><h3>痛点</h3><ul><li>全跑太慢、太贵（含 Windows、多个 Node 版本）；但漏跑又会漏回归。</li><li>流程性错误（改了 kernel 没升版本、release 提交夹带内容）靠人容易漏。</li></ul><h3>补丁</h3><ul><li><b>第一层：秒级守卫</b>（<code>ci.yml</code>）：version-guard、kernel-guard、pi-subagents-guard、lane-guard、docs-sync、docs-coverage、unused-exports、lock-sync（另有 config-surface-guard）；测试矩阵（ubuntu/windows × Node 22/24）<code>needs</code> 这些守卫，坏提交在第一层就停。</li><li><b>第二层：按路径触发的专项车道</b>：theorem lane 只在 <code>src/loop/**</code>、<code>kernel/src/refs.ts</code> 等相关路径变化时跑；各 native e2e、image、registry、canary 各有 workflow。</li><li><b>自动合并门</b>（AGENTS.md §7.4）：必须有<b>复现原 bug 的回归测试</b>、在 rebase 后的头上全绿，并且触及 wire/配置/kernel/updater 的一律人工评审。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>CI 的设计原则是<b>“便宜的先、专用的按路径”</b>。把流程规则（kernel 改动必须升版本、release 提交只改 version）也写成守卫，是因为这类错误人会漏，而漏了的后果是发布链坏掉。自动合并门里我最看重的一条是：<b>必须有一个能复现原 bug 的回归测试</b>——没有它，“修好了”只是声明。代价是 CI 配置本身也要维护，所以 docs-coverage、unused-exports 这类守卫也在保护它不腐烂。</div>
+<div class="cmp"><div><b>pi</b>评估是独立的 <code>packages/evals</code>，与单元测试分开命令运行。<span class="tag">[代码]</span></div><div><b>codex</b>Rust workspace 的 CI 配置本章未逐行核对。<span class="tag">[推断]</span></div><div><b>本项目</b>守卫 → 平台矩阵 → 路径触发的专项车道；自动合并门明确排除高风险路径。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：为什么 e2e 里“真模型”不进默认 CI？</summary><p>成本、稳定性和凭据三个原因；且它的价值在“改请求管线之前跑一遍”，不在每个提交都跑。AGENTS.md 规定改 <code>src/server.ts</code>、<code>src/loop/**</code> 等前至少跑 codex 套件的核心四阶段，改 updater 前跑 registry 套件——这是<b>把昂贵测试绑到高风险改动</b>，而非绑到每次提交。<span class="tag">[代码]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“前面评估的都是机制。但 agent 的好坏最终看任务做没做成——这涉及另一类评估：看结果还是看轨迹？”</div>
+</section>
+
+<section class="step" data-s="6"><h2>E6 · 结果 vs 轨迹：agent 评估怎么选目标</h2>
+<div class="row"><h3>痛点</h3><ul><li>只看<b>最终结果</b>：模型走了弯路、重复读文件也算通过，且失败时不知道哪步错。</li><li>只看<b>轨迹</b>（必须按某条路径调用某些工具）：会把合理的替代路径判错，评估变成对实现的耦合。</li></ul><h3>取舍</h3><ul><li><b>结果为主，用可程序判定的哨兵</b>：本项目 e2e 用哨兵数字和“不得回显污染值”判定，不让另一个模型判卷。</li><li><b>轨迹只取机制性指标</b>：re-fetch 次数、调用数、billed token——它们是<b>压缩效果的代理量</b>，不是对路径的硬编码要求。</li><li><b>LLM 当裁判要谨慎</b>：位置/冗长偏好、自我偏好、同一模型评自己、判定不稳定；能用程序判的就别用模型判。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>我的原则是：<b>终态正确是底线，轨迹只在它本身就是被测量时才看</b>。对压缩系统，轨迹指标（重复读取次数、调用数）恰好就是效果，所以要看；但我不要求“必须先调用 A 再调用 B”。至于 LLM-as-judge，我只在无法程序化判定时用，并且会控制：固定判卷模型、盲评、校准一小批人工标注、多次取一致；否则判分噪声会淹没真实差异。本项目自己的 e2e 和试点探针尽量选了<b>可程序判定的探针</b>，我认为这是更稳的路线。</div>
+<div class="cmp"><div><b>pi</b>基于 <code>vitest-evals</code>：host eval 是普通断言套件；<code>smoke.eval.ts</code> 既断言输出，也断言 usage 与 token 数。<span class="tag">[代码]</span></div><div><b>codex</b>测试关注请求形态与事件序列（“这一轮发出了什么”），偏轨迹/形态断言。<span class="tag">[推断]</span></div><div><b>本项目</b>结果用哨兵判定；轨迹类量（re-fetch、billed token）只作为效果指标。<span class="tag">[代码]</span></div><div><b>LangGraph</b>LangSmith：离线评估（带参考的数据集，上线前）与在线评估（生产 trace，无参考）形成闭环；轨迹评估把实际步骤序列与期望对比，示例用 <code>debug</code> 流记录节点和工具调用；只按工具名匹配会忽略参数，文档建议用 LLM 评委看完整轨迹。<span class="tag">[文档]</span></div></div>
+<details><summary>追问：轨迹评估什么时候是对的？</summary><p>当路径本身有约束时：安全关键的工具顺序（先授权再执行）、必须经过某个检查点、或调用成本本身就是目标。否则它会把评估和实现绑死。折中是<b>断言“不得发生什么”</b>（负向约束），而不是“必须按这条路径”。<span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“最后的问题：压缩到底有没有用？这就进入对照实验。”</div>
+</section>
+
+<section class="step" data-s="7"><h2>E7 · A/B 评估：多臂对照与归因拆分</h2>
+<div class="row"><h3>痛点</h3><ul><li>生产里的省钱数字没有对照，无法分辨是压缩的功劳还是别的因素。</li><li>不同工作负载下“最优压缩频率”不一样，单一场景的结论会误导。</li></ul><h3>论文里的受控试点（作者自报）<span class="tag">[论文]</span></h3><ul><li><b>Session Marathon</b>：18 个串行任务 × 6 遍 = 108 次任务执行，含从记忆回答的召回探针；窗口 65,536，单一评估模型，温度 0。</li><li><b>四个臂</b>：滑窗、阈值自动压缩（80%）、确定性引擎策略、billion-context。</li><li>计费 token 相对保留基线降低 <b>31–54%</b>（默认配置 −31.5%，extreme 变体 −53.7%），re-fetch 降 63%（即 <b>2.7×</b>）；默认配置下召回探针无可测损失。</li><li><b>归因拆分</b>：“静止对照”（128K 窗口、单次运行 n=1）不执行任何压缩、只带 doctrine 文本和消息标签，就出现了 −62% 的 re-fetch 下降——所以 2.7× 归因于<b>整套 doctrine+ref 标签+布局</b>，而不是“任务条件压缩”本身。</li><li><b>惰性基线</b>：阈值臂在该规模下从未触发，行为等同滑窗，论文自己标为 artifact 而非对阈值方案的反驳。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>这一节我想展示的是<b>怎么把一个好看的数字拆开</b>。headline 是 2.7× 更少的重复读取，但作者自己做了一个静止对照，发现几乎不压缩也能得到同样的下降，所以结论应该是“doctrine 加标签的组合起作用”，而不是“压缩算法起作用”。同样，阈值基线没触发就是一个<b>惰性基线</b>，不能拿它当对手赢了的证据。这些是论文里自己写出来的，我只是复述；我自己做 A/B 也会先问：<b>对照臂真的在工作吗？每个因素单独加是什么效果？</b>此外探针有饱和（85–95%），“质量持平”受仪器灵敏度限制。</div>
+<div class="cmp"><div><b>pi</b>docs-lift eval：每个 case 在 <code>without_docs</code> 与 <code>with_docs</code> 两个隔离容器里各跑；<b>成对比较</b>，交替重复顺序以减少顺序偏差；某对缺失则<b>不发布 headline lift</b>，并标记 no-lift、对照饱和、flaky。<span class="tag">[代码]</span></div><div><b>codex</b>压缩相关测试验证机制（形态、恢复、分叉），不是对照式效果评估。<span class="tag">[推断]</span></div><div><b>本项目</b>试点多臂 + 静止对照 + 排列重跑；论文计划中的 oracle 臂与组件因子实验尚未完成。<span class="tag">[论文]</span> 证据强度的完整分级见第 3 章 K9，此处只讲评估方法。</div><div><b>Claude Code</b>阈值自动压缩被论文作为“Claude Code 风格”的基线臂，是对其公开行为的模拟，而非直接使用该产品。<span class="tag">[论文]</span></div></div>
+<details><summary>追问：如果你来设计一个更可信的压缩评估？</summary><p>固定任务集和随机种子；对照臂必须真的触发并记录触发次数；因子化消融（doctrine、标签、压缩引擎各自独立开关）；多模型、多窗口；质量用<b>可程序判定的回读探针</b>，并加更难的探针避免饱和；报告均值加方差，不只报告单次。<span class="tag">[推断]</span></p></details>
+<details><summary>追问：缓存命中率 94.2% 能算压缩的效果吗？</summary><p>这是生产观察（单用户、08-20 快照，间隔不足 2 分钟的调用占约 89% 流量），且与“只追加”的结构性前提有关（论文称之为前提条件）。它说明<b>机制没有破坏缓存</b>，不能单独证明压缩带来收益；要证明收益必须有同工作负载的对照。<span class="tag">[论文]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“所有这些证据强度不同，最后一步是怎么如实地报告它。”</div>
+</section>
+
+<section class="step" data-s="8"><h2>E8 · 证据分级：如实汇报强度</h2>
+<div class="row"><h3>痛点</h3><ul><li>把“机制已被证明”“受控试点”“生产观察”混在一起讲，会让听者高估整体结论。</li></ul><h3>我的分级</h3><ol><li><b>机制层，强</b>：不变量、契约账本、字节 prover、定理（含变异检查）、真客户端 e2e——可复现、会在 CI 里红。<span class="tag">[代码]</span></li><li><b>受控试点，中</b>：31–54% 与 2.7×；单一模型、温度 0、少量种子/排列；归因已作拆分；仍属作者自报。<span class="tag">[论文]</span></li><li><b>生产观察，弱于因果</b>：约 70× 常驻折叠比、活跃节奏下 94.2% 缓存读；单一专家用户、无随机对照，反事实节省部分是建模的。<span class="tag">[论文]</span></li><li><b>尚未验证</b>：摘要质量量化、多模型、oracle 臂、组件因子实验。<span class="tag">[论文]</span></li></ol><h3>如实写在文档里的东西</h3><ul><li>账本记录修复<b>边界</b>（“没覆盖什么、为何不覆盖”）；</li><li>文档与代码不一致时，以代码为准并说明（例见第 3 章 K9 的 merge-blocks）；</li><li>数字带出处与适用口径。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>我会这样收尾：<b>机制我有证据，效果我有试点，规模我只有观察</b>。我不会把 70× 说成通用结论，也不会把 31–54% 说成对任何工作负载成立。面试里把“证据强度”讲清楚，比把数字讲漂亮更像专家：因为评估这件事本身的核心就是知道自己的结论能撑多重。</div>
+<div class="row"><h3>如果重做，改这四点</h3><ol><li>把对账成功率、回退次数做成一等可观测指标，并让 e2e 断言它。</li><li>补受控 A/B 的因子消融和多模型复现，把“作者自报”换成可复现脚本。</li><li>给摘要质量加回读探针，并加难度防饱和。</li><li>把 prover/fuzz 的 volatile carrier 声明与 golden 一起纳入同一份清单，减少隐含约定。<span class="tag">[推断]</span></li></ol></div>
+</section>
+</div>
+
+<h2>一页复习卡</h2>
+<p class="sub">点任意一行跳到对应步骤。</p>
+<div class="scrollt"><table id="tbl">
+<tr><th>步骤</th><th>痛点</th><th>补丁</th><th>新代价 → 引出</th><th>不变量</th></tr>
+<tr class="link" data-j="0"><td>E0 手点</td><td>静默、低频、昂贵的失败</td><td>—</td><td>→ 确定性的先写成测试</td><td>①</td></tr>
+<tr class="link" data-j="1"><td>E1 不变量</td><td>隐含前提只在人脑里</td><td>编号规则 I1–I4；kernel 与宿主两层</td><td>外部校验不受控 → 契约</td><td>①</td></tr>
+<tr class="link" data-j="2"><td>E2 契约</td><td>上游 400 只在生产暴露</td><td>fake 上游 + WIRE_RULES 账本 + golden</td><td>例子不够 → 全称命题</td><td>②</td></tr>
+<tr class="link" data-j="3"><td>E3 prover</td><td>缓存打断反复出现</td><td>字节 prover、fuzz、Z3 + 变异检查</td><td>mock 外还有真客户端</td><td>①</td></tr>
+<tr class="link" data-j="4"><td>E4 e2e</td><td>mock 测不到 UA/重试/怪癖</td><td>真客户端、哨兵、门控、hermetic 车道</td><td>太贵 → 分层</td><td>①②</td></tr>
+<tr class="link" data-j="5"><td>E5 CI</td><td>全跑太贵、漏跑漏回归</td><td>守卫在前、按路径专项车道、自动合并门</td><td>→ 评估 agent 本身</td><td>②</td></tr>
+<tr class="link" data-j="6"><td>E6 结果/轨迹</td><td>只看结果或只看过程都偏</td><td>结果为底线、轨迹只取机制指标、谨慎用 LLM 评委</td><td>→ 压缩有用吗</td><td>③</td></tr>
+<tr class="link" data-j="7"><td>E7 A/B</td><td>无对照、归因含糊</td><td>多臂 + 静止对照 + 惰性基线说明</td><td>→ 如何汇报</td><td>③</td></tr>
+<tr class="link" data-j="8"><td>E8 分级</td><td>证据强度被混讲</td><td>机制/试点/观察/未验证 四级</td><td>—</td><td>全部</td></tr>
+</table></div>
+</main>
+
+<script>
+(function(){
+var CAP=["E0：只有手点试跑。","E1：加入单元与不变量测试。","E2：加入契约测试与 golden 账本。","E3：加入字节 prover、fuzz 与定理。","E4：加入真实客户端 e2e。","E5：按路径分层的 CI 与守卫。","E6：区分结果与轨迹的 agent 评估。","E7：多臂 A/B 与归因拆分。","E8：证据分级，如实汇报。"];
+var cur=0,all=false;
+var steps=[].slice.call(document.querySelectorAll('.step')),N=steps.length-1,nav=document.getElementById('nav'),btns=[];
+function exitAll(){if(all){all=false;document.getElementById('steps').classList.remove('all');document.getElementById('allb').setAttribute('aria-pressed',false)}}
+for(var i=0;i<=N;i++){(function(i){var b=document.createElement('button');b.textContent='E'+i;b.onclick=function(){exitAll();set(i)};nav.appendChild(b);btns.push(b)})(i)}
+var rb=document.createElement('button');rb.textContent='↺ 重置';rb.onclick=function(){exitAll();set(0)};nav.appendChild(rb);
+var svgEls=[].slice.call(document.querySelectorAll('svg [data-s]'));
+function set(n){cur=Math.max(0,Math.min(N,n));
+steps.forEach(function(s){s.classList.toggle('on',+s.dataset.s===cur)});
+btns.forEach(function(b,i){b.setAttribute('aria-pressed',i===cur)});
+svgEls.forEach(function(e){var s=+e.dataset.s,show=all||s<=cur;
+if(e.dataset.h&&(all||cur>=+e.dataset.h))show=false;
+e.classList.toggle('vis',show);
+if(e.classList.contains('bx')||e.classList.contains('ln')){e.classList.toggle('new',!all&&s===cur&&cur>0)}});
+document.getElementById('cap').textContent=all?"全貌：把所有环节放在一起。":CAP[Math.min(cur,CAP.length-1)];
+document.getElementById('prev').disabled=cur===0;document.getElementById('next').disabled=cur===N}
+function top1(){document.getElementById('nav').scrollIntoView({behavior:'smooth',block:'start'})}
+document.getElementById('prev').onclick=function(){exitAll();set(cur-1);top1()};
+document.getElementById('next').onclick=function(){exitAll();set(cur+1);top1()};
+var ab=document.getElementById('allb');
+ab.onclick=function(){all=!all;document.getElementById('steps').classList.toggle('all',all);ab.setAttribute('aria-pressed',all);set(cur)};
+[].forEach.call(document.querySelectorAll('tr.link'),function(r){r.onclick=function(){exitAll();set(+r.dataset.j);top1()}});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'){exitAll();set(cur+1)}if(e.key==='ArrowLeft'){exitAll();set(cur-1)}if(e.key==='Escape'){exitAll();set(0)}});
+set(0);
+})();
+</script>

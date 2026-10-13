@@ -1,0 +1,166 @@
+<title>上下文压缩演进讲法</title>
+<main>
+<h1>上下文工程与压缩：一条演进主线</h1>
+<p class="sub">本仓库的核心。同前两章的讲法：从最朴素的“全量发送”出发，遇到问题加补丁，补丁带来新代价，代价引出下一步。<span class="tag">[代码]</span> 读过源码 <span class="tag">[推断]</span> 我的判断 <span class="tag">[文档]</span> 公开行为 <span class="tag">[论文]</span> 作者自报</p>
+
+<div class="elev"><b>60 秒电梯版（开场就说这段）</b><br>
+“上下文压缩本质是在<b>信息保真、缓存稳定、成本</b>三者之间做取舍。我按演进顺序讲：朴素的<b>全量发送</b>会越滚越贵；<b>滑窗</b>会丢目标和破坏缓存；改成<b>摘要</b>又会信息衰减，所以要<b>可回溯</b>；一次重写太大，于是<b>分层折叠</b>让多数改动只发生在最近一层；什么时候压由<b>增长量</b>驱动，并让正在干活的模型自己写摘要；大输出<b>前置治理</b>；代理不拥有对话，所以要有<b>身份与对账</b>；每一层都有更粗但更可靠的<b>兜底</b>；最后诚实说明<b>证据强度</b>。”</div>
+
+<h2>三条贯穿全程的不变量</h2>
+<div class="inv">
+<div><p><b>① 有损但不丢</b><br>折叠只是换一种视图，原文保留，需要时可取回。</p></div>
+<div><p><b>② 前缀稳定</b><br>只追加、少改写，才能命中 prompt cache。</p></div>
+<div><p><b>③ 身份不漂移</b><br>消息 id 与引用号永不复用，对账失败要可解释。</p></div>
+</div>
+
+<h2>演进图（随步骤逐步长出来）</h2>
+<div class="nav" id="nav"></div>
+<figure><div class="scrollx">
+<svg viewBox="0 0 760 340" width="760" role="img" aria-label="上下文压缩数据流随步骤逐步增加摘要折叠、块存储、触发、前置治理、对账与兜底">
+<defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs>
+<g marker-end="url(#ar)">
+<path class="ln" data-s="0" d="M106 168 H620"/>
+<path class="ln" data-s="2" d="M668 140 V100 H424 V140"/>
+<path class="ln" data-s="3" d="M424 196 V250"/>
+<path class="ln dash" data-s="3" d="M452 250 V196"/>
+<path class="ln" data-s="5" d="M668 250 V196"/>
+<path class="ln" data-s="8" d="M546 250 V196"/>
+</g>
+<text class="lbl" data-s="0" x="112" y="160">每轮全量发送</text>
+<text class="lbl" data-s="2" x="470" y="94">模型写摘要（compress）→ 折叠</text>
+<text class="lbl" data-s="3" x="340" y="226">写入块</text>
+<text class="lbl" data-s="3" x="458" y="226">取回</text>
+<text class="lbl" data-s="5" x="676" y="226">nudge</text>
+<text class="lbl" data-s="8" x="552" y="226">兜底</text>
+<g class="bx" data-s="0"><rect x="10" y="140" width="96" height="56" rx="8"/><text class="t" x="20" y="162">History</text><text x="20" y="182">客户端历史</text></g>
+<g class="bx" data-s="7"><rect x="132" y="140" width="96" height="56" rx="8"/><text class="t" x="142" y="162">身份对账</text><text x="142" y="182">id·ref·ladder</text></g>
+<g class="bx" data-s="6"><rect x="254" y="140" width="96" height="56" rx="8"/><text class="t" x="264" y="162">前置治理</text><text x="264" y="182">CCR·crush</text></g>
+<g class="bx" data-s="1" data-h="2"><rect x="376" y="140" width="96" height="56" rx="8"/><text class="t" x="386" y="162">滑窗</text><text x="386" y="182">丢最旧</text></g>
+<g class="bx" data-s="2"><rect x="376" y="140" width="96" height="56" rx="8"/><text class="t" x="386" y="162">折叠视图</text><text x="386" y="182">摘要 + 近期</text></g>
+<g class="bx" data-s="0"><rect x="498" y="140" width="96" height="56" rx="8"/><text class="t" x="508" y="162">Wire</text><text x="508" y="182">发往上游</text></g>
+<g class="bx" data-s="0"><rect x="620" y="140" width="96" height="56" rx="8"/><text class="t" x="630" y="162">Model</text><text x="630" y="182">产出调用</text></g>
+<g class="bx" data-s="3"><rect x="254" y="250" width="216" height="52" rx="8"/><text class="t" x="264" y="272">块存储</text><text x="264" y="290" data-s="3" id="storeTxt">原文保留 + 摘要块</text></g>
+<g data-s="4"><text x="372" y="272" font-size="12" fill="var(--acc)" font-weight="700">T1 / T2 / T3 分层</text></g>
+<g class="bx" data-s="5"><rect x="620" y="250" width="96" height="52" rx="8"/><text class="t" x="630" y="272">触发</text><text x="630" y="290">增长驱动</text></g>
+<g class="bx" data-s="8"><rect x="498" y="250" width="96" height="52" rx="8" stroke-dasharray="5 4"/><text class="t" x="508" y="272">兜底阶梯</text><text x="508" y="290">截断·digest</text></g>
+</svg></div>
+<figcaption id="cap"></figcaption></figure>
+
+<div class="nav" style="position:static;border:0;padding:0"><button id="prev">← 上一步</button><button id="next">下一步 →</button><span class="sp"></span><button id="allb" aria-pressed="false">全文连读</button></div>
+<div id="steps">
+
+<section class="step" data-s="0"><h2>K0 · 最朴素：每轮全量发送</h2>
+<div class="say"><span class="k">怎么说：</span>最朴素的做法是每轮把完整 history 发给模型。它正确，但有两个问题：<b>总开销随轮数二次增长</b>（第 n 轮要重发前 n−1 轮），以及<b>迟早超出窗口</b>。缓存能缓解重复付费，但解决不了窗口上限。后面的每一步都是在回答：“怎么让发出去的东西变小，又不伤任务”。</div>
+<div class="row"><h3>这个朴素版的洞</h3><ul><li>窗口满了怎么办 → K1</li><li>丢东西会伤任务，怎么保真 → K2/K3</li><li>改写会破坏缓存 → K4</li><li>什么时候压、谁来压 → K5</li><li>大工具输出占大头 → K6</li><li>代理拿到的历史会被客户端改写 → K7</li><li>压缩失败了怎么办 → K8</li></ul></div>
+<div class="bridge"><span class="k">过渡句：</span>“最直觉的办法是把最老的丢掉，看看它有什么问题。”</div>
+</section>
+
+<section class="step" data-s="1"><h2>K1 · 滑窗/截断：丢最旧的</h2>
+<div class="row"><h3>痛点</h3><ul><li>丢掉的往往是<b>任务目标和约束</b>（一开始用户说的话）。</li><li>可能把 <code>tool_call</code> 和 <code>tool_result</code> 拆开，provider 直接拒绝。</li><li>每轮丢一点，<b>前缀每轮都在变</b>，prompt cache 几乎全废（缓存经济见第 6 章）。</li></ul><h3>能打的补丁</h3><ul><li>固定首条用户消息不被丢（本项目 kernel 对首条用户消息无条件保留，且还因为部分后端要求会话必须以 user 开头，DESIGN §8.1）。</li><li>切点避开 tool result，保证配对。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>滑窗最大的问题不是丢信息，而是<b>丢了就没了</b>，并且<b>每轮都改前缀</b>。所以结论是：要压，就必须把被压掉的内容换成<b>等价的更短表示</b>，而且改动要集中、稳定。</div>
+<div class="bridge"><span class="k">过渡句：</span>“更短的等价表示，最自然的就是摘要。”</div>
+</section>
+
+<section class="step" data-s="2"><h2>K2 · 摘要折叠：把一段前缀换成摘要</h2>
+<div class="row"><h3>痛点</h3><p>摘要要有人写；写摘要是个有损操作；什么时候压、压哪一段也要决策。</p><h3>补丁</h3><ul><li><b>谁来写摘要</b>：专起一次摘要请求，或让<b>正在工作的模型</b>自己通过工具写。</li><li><b>kernel 的分工</b>：模型写摘要，kernel 决定何时、压哪段、落状态、渲染；它是不调模型的纯函数库，摘要作为字符串入参。</li><li><b>范围与长度约束</b>：默认最小压缩范围 5000 token，摘要长度 50–20000 字符。</li><li>保留近期：默认保护最近 5 条消息 / 约 5000 token。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>让正在干活的模型自己写摘要有两个好处：它拥有最完整的当下上下文，知道什么值得保留；也省掉一次额外请求。代价是<b>依赖模型配合</b>，所以后面要有触发和兜底。kernel 做成无状态、不做 I/O 的纯库，是为了让同一套逻辑能被代理、插件、不同宿主复用。</div>
+<div class="cmp"><div><b>pi</b>压缩时专门发起摘要请求；保留近期 <code>keepRecentTokens=20000</code>，切点不落在 tool result 上。<span class="tag">[代码]</span></div><div><b>codex</b>本地压缩（<code>compact.rs</code>）或远端压缩（<code>compact_remote_v2</code>）；摘要带固定前缀模板。<span class="tag">[代码]</span></div><div><b>本项目</b>模型通过 <code>compress</code> 工具给摘要；kernel 不调模型；默认配置见 <code>kernel/src/config.ts</code>。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：摘要写差了怎么办？</summary><p>不能指望每次都写好，所以设计成<b>可回溯</b>（下一步）：摘要差，模型可以 <code>decompress</code> 回到原文。另外高层提示词里要求摘要保留关键标识（路径、命令、结论）。</p></details>
+<div class="bridge"><span class="k">过渡句：</span>“但摘要是有损的，如果原文被丢掉，就回不去了——所以关键是让它可回溯。”</div>
+</section>
+
+<section class="step" data-s="3"><h2>K3 · 可回溯：有损视图，无损存储</h2>
+<div class="row"><h3>痛点</h3><p>摘要会漏掉后来才发现重要的细节；摘要的摘要会逐层衰减。</p><h3>补丁</h3><ul><li><b>折叠不删除原文</b>：块存储里同时保留原文与摘要，渲染视图只显示摘要。</li><li><b>引用标签</b>：摘要里用 <code>mNNNNN</code> 引用原消息，模型可 <code>decompress</code> 还原，或 <code>search_context</code> 检索。</li><li><b>取回的内容可再次被压缩</b>：<code>decompress</code>、<code>search_context</code>、<code>read</code>、<code>bash</code> 的结果不进入“最近保护区”，避免取回后上下文变得不可回收。</li><li><b>compress 调用本身受保护</b>：<code>compress</code> 与 <code>acp_rule</code> 永远不被压掉，否则摘要和用户规则会丢。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>我把它概括为<b>“有损视图，无损存储”</b>：模型看到的是短的，但信息没有真正丢。这样摘要质量不再是单点风险，最坏情况是多一次取回。代价是要维护块存储和引用关系，并且<b>引用号必须永不复用</b>（K7）。</div>
+<div class="cmp"><div><b>pi / codex</b>压缩后旧消息仍在会话记录里（用于展示与恢复），但模型看到的只有摘要；模型侧没有“按引用取回原文”的工具。<span class="tag">[推断]</span></div><div><b>本项目</b><code>kernel/src/decompress.ts</code>、<code>ccr.ts</code>（<code>acp_retrieve</code>）、<code>protected.ts</code>。<span class="tag">[代码]</span></div></div>
+<div class="bridge"><span class="k">过渡句：</span>“可回溯解决了保真，但每次折叠一大段，仍然会让缓存失效——所以要控制改动落在哪。”</div>
+</section>
+
+<section class="step" data-s="4"><h2>K4 · 分层折叠 T1/T2/T3：让改动集中在最近一层</h2>
+<div class="row"><h3>痛点</h3><p>每次都重写整段前缀，会让后面全部缓存失效；而且反复“摘要的摘要”会衰减。</p><h3>补丁（类似 LSM tree）</h3><ul><li><b>T1</b>：新近、小块摘要；<b>T2</b>：多个 T1 合并后的更概括的块；<b>T3</b>：更老更概括。</li><li>大多数折叠只产生新的 T1，<b>老层字节保持稳定</b>。</li><li>升层看<b>token 质量</b>：待蒸馏质量超过步长的 <b>1.5 倍</b>（<code>tier2GrowthMultiplier</code>，即 75K），且大于低层的有效待压量，才选 T2/T3。数量触发（<code>tier2Trigger/tier3Trigger</code>）默认 1000 / 2000，<b>等于关闭</b>，只有显式配置才生效（#379：块数不是需求信号）。<span class="tag">[代码]</span></li><li>首条用户消息固定在直接范围，折叠锚点不早于它（#2733）。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>LSM 的类比很贴切：写入先落到小而新的层，老数据很少被重写。放到缓存语境里就是——<b>前缀越靠前越稳定</b>，折叠的“写放大”集中在尾部。取舍是复杂度：要管理多层块、升层时机，以及客户端回传历史与内部块的对账（K7）。</div>
+<details><summary>核对：文档和代码有出入吗？</summary><p>有。<code>kernel/DESIGN.md</code> 的管线描述里有 <code>merge-blocks</code> 节点，但 <code>buildNodes</code> 的实际节点表里<b>没有</b>它。面试时讲“分层”以代码为准，可以主动说“设计文档比代码超前”。<span class="tag">[代码]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“有了分层，下一个问题是：什么时候触发一次折叠？”</div>
+</section>
+
+<section class="step" data-s="5"><h2>K5 · 触发：增长驱动 + 模型自己压（nudge）</h2>
+<div class="row"><h3>痛点</h3><p>按占用率触发会在“快满时”才行动；按轮数触发又和实际成本无关；模型也未必愿意压。</p><h3>补丁</h3><ul><li><b>固定增长步长 50K</b>：<code>growthFloor = growthCap = 50000</code>，不随窗口缩放（设计决定，AGENTS.md KDD#8）。</li><li><b>增长门</b>：距上次提示的增长至少 max(20K, 0.45×50K)=22.5K 才提示，避免微小增长就触发。</li><li><b>高压带</b>：占用 ≥75% 时绕过增长门与节奏，只要有足够可压量就提示；<b>紧急</b>：≥95% 触发确定性截断（K8）。占用低于 45% 不提示。</li><li><b>最小收益门</b>（高压带）：可压量至少 max(5000, 窗口的 1%) token。</li><li>用户逃生口：<code>compress.nudgeGrowthTokens</code> 可把步长调大（想更懒的用户）。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>为什么不用窗口比例？团队明确决定“增长驱动，不要用占用率/数量做代理指标”：1M 窗口的会话每涨 50K 就折叠一次是想要的精简行为，而不是等快满才处理。代价是压缩更频繁，但每次折叠范围小、前缀更短、成本更低。提示（nudge）是<b>软触发</b>，由模型决定是否、如何压；这比硬编码规则更能保留“值得留”的信息。</div>
+<div class="cmp"><div><b>pi</b><code>contextTokens &gt; window − reserveTokens(16384)</code> 触发，属阈值型。<span class="tag">[代码]</span></div><div><b>codex</b>回合前预检 + 回合中 <code>should_roll_over</code> 触发 MidTurn 压缩，也属阈值型。<span class="tag">[代码]</span></div><div><b>本项目</b>增长驱动的 <code>decideNudge</code>；T2/T3 升层按步长倍数与待压量仲裁。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：如果模型就是不压怎么办？</summary><p>提示分级：普通 nudge → 高压带更强的提示 → 紧急区的确定性截断（K8）。也就是<b>不把可靠性押在模型配合上</b>。</p></details>
+<div class="bridge"><span class="k">过渡句：</span>“触发解决了‘何时’，但上下文里最大头往往是工具输出——要在进入折叠之前先处理它。”</div>
+</section>
+
+<section class="step" data-s="6"><h2>K6 · 前置治理：大工具输出先换成引用</h2>
+<div class="row"><h3>痛点</h3><p><code>read</code>、<code>bash</code> 的大输出是上下文膨胀主源，且多数只用一次。</p><h3>补丁</h3><ul><li><b>CCR</b>（replace-once-at-arrival）：到达时一次性替换为引用，阈值约 4000 token，按需 <code>acp_retrieve</code> 取回；只替换一次，之后前缀不再变。</li><li><b>crush</b>：JSON 折叠无损；代码裁剪、日志选择有损且 fail-open，保留 ERROR/FAIL 行。</li><li>CCR 与 crush 在 kernel 默认配置里都是 <code>enabled: false</code>；bili 侧 CCR 同样是 opt-in（<code>compress.ccr.enabled</code>，且需有取回工具通道，插件模式下不启用）。<span class="tag">[代码]</span></li></ul></div>
+<div class="say"><span class="k">怎么说：</span>先治理再折叠有两个好处：折叠要处理的量变少，并且<b>大块内容不会在多次折叠里被反复搬运</b>。（输出治理细节见第 2 章。）</div>
+<details><summary>展开：kernel 每轮管线的节点顺序 <span class="tag">[代码]</span></summary><p><code>reconcile-live-ids → assign-refs → sync-blocks → prune → ccr-store → absorb-hide → crush → absorb-prompt（这三个节点按配置自行开关）→ filter → hide-compress-calls → recommend → nudge-inject → emergency-truncate → render-refs</code></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“前面都假设代理能稳定地看到‘同一份历史’，但客户端会改写它——这就是身份与对账。”</div>
+</section>
+
+<section class="step" data-s="7"><h2>K7 · 身份与对账：代理不拥有对话的代价</h2>
+<div class="row"><h3>痛点</h3><p>代理每轮拿到的是客户端回传的历史，它可能被编辑、重发、被客户端自己压缩；内部块要和它对得上，否则折叠会错位，甚至把摘要挂在错的消息上。</p><h3>补丁</h3><ul><li><b>content-hash id</b> 标识消息；<b>引用号 <code>mNNNNN</code> 永不复用</b>：摘要会跨很多轮引用它，号码一旦被重新分配，解压缩会<b>静默指向错误内容</b>。</li><li><b>多级对账（reconcile ladder）</b>：后缀/前缀锚点、<code>toolCallId</code>、归一化文本、位置匹配、助手回合键、图片变体，最后回收“僵尸块”。</li><li><b>前缀亲和（hash 链）</b>：用于把请求归到正确的会话/分叉。<span class="tag">[推断]</span></li></ul></div>
+<div class="say"><span class="k">怎么说：</span>这是代理模式的<b>长期成本</b>：pi 和 codex 自己持有 history，所以不存在这个问题。本项目把它做成显式的一层，并把“号码永不复用”写成 kernel 的硬契约，因为这类错误没有报错、只有错答案。如果用插件模式（客户端拥有对话），状态天然一致，这层负担会小得多。</div>
+<div class="cmp"><div><b>pi / codex</b>自己持有并追加 history，没有“回传历史对账”这一层。<span class="tag">[推断]</span></div><div><b>本项目</b><code>src/fold-reconcile.ts</code>、<code>src/prefix-affinity.ts</code>、AGENTS.md「Kernel Contract: Message Ids Are Never Reused」。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：对账失败时怎么办？</summary><p>退化而不是错放：对不上就不应用该次折叠（保持原文发送），并记录可观测的日志；宁可多花一些 token，也不让摘要挂错位置。<span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“最后一类问题：如果上面任何一环失败，系统怎么不崩？”</div>
+</section>
+
+<section class="step" data-s="8"><h2>K8 · 兜底阶梯：每一层都有更粗但更可靠的下一层</h2>
+<div class="row"><h3>痛点</h3><p>模型可能不配合；摘要可能失败；窗口可能在一次大输出后瞬间逼近上限。</p><h3>阶梯</h3><ol><li><b>nudge</b>（软提示，模型自己压）；</li><li><b>高压带</b>（≥75%，加强提示）；</li><li><b>emergency truncate</b>（≥95%）：对旧的大 tool result 保留头尾各 2000 字符、中间换成标记，按体积从大到小，直到降到约 85.5%（0.95×0.9）；最近 <code>preserveRecentMessages</code>（默认 5）条不动；tool result 不够才碰 user/assistant 文本，且<b>从不碰已渲染的摘要块</b>；</li><li><b>preflight</b>（宿主侧 <code>src/preflight.ts</code>，#247）：输入本身超过窗口时，发起专门的摘要调用从最旧范围开始折叠；仅当溢出倍数大到 LLM 折叠不可能收敛（#2383）才改用确定性 digest；</li><li><b>terminalEscape</b>：用完截断仍无法降到限制以下、连续 3 次（<code>terminalEscapeAfter</code>）后发出信号，由宿主提示“新开会话或用原生 compaction”，避免无声卡死。</li></ol></div>
+<div class="say"><span class="k">怎么说：</span>设计原则是<b>优雅降级</b>：越往后越粗暴、越不依赖模型，但越可靠；而且每一层都 <b>fail-open</b>，宁可少压也不让请求失败。可观测性也是兜底的一部分：截断候选为 0 时要告警，否则会出现“静默不生效”（#300）。</div>
+<div class="bridge"><span class="k">过渡句：</span>“说了这么多机制，最后要回答：效果到底有多少证据？”</div>
+</section>
+
+<section class="step" data-s="9"><h2>K9 · 证据与改进：诚实说明强度</h2>
+<div class="row"><h3>论文里的数字，按来源分开讲</h3><p><b>生产观察（三个宿主、单用户、非随机）</b></p><ul><li>常驻宏观折叠约 70×；</li><li>调用间隔不足 2 分钟时缓存读占比 94.2%（该间隔占约 89% 流量；缓存读占比随间隔变长单调衰减，&gt;60 分钟仅 9.1%）。</li></ul><p><b>对照 pilot（单一模型 qwen3.8-27b，temperature 0，本地 sglang，Session Marathon 18 个串行任务）</b></p><ul><li>压缩臂相对 sliding 基线，计费 token 降低 31–54%（默认 −31.5%，extreme −53.7%）；</li><li>重新读取次数少 2.7 倍（−63%），但论文把它归因于“提示词准则 + 引用标签”这一整体，而不是压缩本身（128K 窗口下压缩从未触发的单次对照里已出现 −62%）。</li></ul><p>论文自己写明的局限：单用户、观察性无随机对照、受控臂只用一个模型（温度 0）、摘要质量在 RQ2 前未量化。<span class="tag">[论文]</span></p><h3>我会怎么补</h3><ul><li><b>A/B</b>：固定任务集，比较有/无压缩的成功率、轮数、重新读取次数、成本。</li><li><b>摘要质量评估</b>：压缩后让模型回答早期细节问题（回读测试）。</li><li><b>对账可观测</b>：对账成功率与回退次数作为一等指标。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>我会先说结论：<b>机制层面的正确性</b>有测试证据（契约、e2e、不变量），<b>效果层面</b>分两类：生产观察，以及单一模型上的对照 pilot；两者都是作者自报，后者的 2.7× 还要归因到提示词与引用标签整体。然后给出补法。把“证据强度”讲清楚，比把数字讲得漂亮更像专家。</div>
+<div class="row"><h3>如果重做，改这四点</h3><ol><li>用实测 usage 校准 token 估算（触发只做预判）。</li><li>文档与代码对齐（如 <code>merge-blocks</code>）。</li><li>把对账层做成可观测、可回放。</li><li>能走插件模式就走插件模式，代理模式只留给没有扩展点的客户端。</li></ol></div>
+</section>
+</div>
+
+<h2>一页复习卡</h2>
+<p class="sub">点任意一行跳到对应步骤。</p>
+<div class="scrollt"><table id="tbl">
+<tr><th>步骤</th><th>痛点</th><th>补丁</th><th>新代价 → 引出</th><th>不变量</th></tr>
+<tr class="link" data-j="0"><td>K0 全量</td><td>成本二次增长、超窗</td><td>—</td><td>→ 丢旧的？</td><td>—</td></tr>
+<tr class="link" data-j="1"><td>K1 滑窗</td><td>丢目标、拆配对、破缓存</td><td>固定首条用户消息、避开 tool result</td><td>丢了没了 → 摘要</td><td>②</td></tr>
+<tr class="link" data-j="2"><td>K2 摘要</td><td>谁写、压哪段</td><td>模型自己写；kernel 纯函数编排</td><td>有损 → 可回溯</td><td>①</td></tr>
+<tr class="link" data-j="3"><td>K3 可回溯</td><td>漏细节、摘要衰减</td><td>原文保留、引用标签、decompress/search</td><td>改动大 → 分层</td><td>①</td></tr>
+<tr class="link" data-j="4"><td>K4 分层</td><td>整段重写破缓存</td><td>T1/T2/T3，老层字节稳定</td><td>何时触发 → nudge</td><td>②</td></tr>
+<tr class="link" data-j="5"><td>K5 触发</td><td>占用率触发太晚</td><td>50K 增长步长 + 增长门 + 收益门 + 软提示</td><td>大输出 → 前置治理</td><td>②</td></tr>
+<tr class="link" data-j="6"><td>K6 前置</td><td>大输出占大头</td><td>CCR 一次替换、crush</td><td>历史被改写 → 对账</td><td>①②</td></tr>
+<tr class="link" data-j="7"><td>K7 对账</td><td>代理不拥有对话</td><td>content-hash、ref 永不复用、对账阶梯</td><td>仍会失败 → 兜底</td><td>③</td></tr>
+<tr class="link" data-j="8"><td>K8 兜底</td><td>模型不配合、瞬间逼近上限</td><td>高压带、emergency、preflight、terminalEscape</td><td>→ 证据</td><td>全部</td></tr>
+<tr class="link" data-j="9"><td>K9 证据</td><td>数字来源单一</td><td>A/B、回读测试、可观测</td><td>—</td><td>全部</td></tr>
+</table></div>
+</main>
+
+<script>
+(function(){
+var CAP=["K0：History 直接发给 Model。","K1：加入滑窗，丢掉最旧消息。","K2：滑窗被摘要折叠取代，由模型写摘要。","K3：新增块存储：原文保留，可取回。","K4：块存储按 T1/T2/T3 分层。","K5：新增触发：增长驱动，提示模型压缩。","K6：折叠前先做前置治理（CCR/crush）。","K7：最前面加上身份与对账。","K8：新增兜底阶梯，逐级更粗但更可靠。","K9：全貌，附上证据说明。"];
+var cur=0,all=false;
+var steps=[].slice.call(document.querySelectorAll('.step')),N=steps.length-1,nav=document.getElementById('nav'),btns=[];
+function exitAll(){if(all){all=false;document.getElementById('steps').classList.remove('all');document.getElementById('allb').setAttribute('aria-pressed',false)}}
+for(var i=0;i<=N;i++){(function(i){var b=document.createElement('button');b.textContent='K'+i;b.onclick=function(){exitAll();set(i)};nav.appendChild(b);btns.push(b)})(i)}
+var rb=document.createElement('button');rb.textContent='↺ 重置';rb.onclick=function(){exitAll();set(0)};nav.appendChild(rb);
+var svgEls=[].slice.call(document.querySelectorAll('svg [data-s]'));
+function set(n){cur=Math.max(0,Math.min(N,n));
+steps.forEach(function(s){s.classList.toggle('on',+s.dataset.s===cur)});
+btns.forEach(function(b,i){b.setAttribute('aria-pressed',i===cur)});
+svgEls.forEach(function(e){var s=+e.dataset.s,show=all||s<=cur;
+if(e.dataset.h&&(all||cur>=+e.dataset.h))show=false;
+e.classList.toggle('vis',show);
+if(e.classList.contains('bx')||e.classList.contains('ln')){e.classList.toggle('new',!all&&s===cur&&cur>0)}});
+document.getElementById('cap').textContent=all?"全貌：把所有环节放在一起。":CAP[Math.min(cur,CAP.length-1)];
+document.getElementById('prev').disabled=cur===0;document.getElementById('next').disabled=cur===N}
+function top1(){document.getElementById('nav').scrollIntoView({behavior:'smooth',block:'start'})}
+document.getElementById('prev').onclick=function(){exitAll();set(cur-1);top1()};
+document.getElementById('next').onclick=function(){exitAll();set(cur+1);top1()};
+var ab=document.getElementById('allb');
+ab.onclick=function(){all=!all;document.getElementById('steps').classList.toggle('all',all);ab.setAttribute('aria-pressed',all);set(cur)};
+[].forEach.call(document.querySelectorAll('tr.link'),function(r){r.onclick=function(){exitAll();set(+r.dataset.j);top1()}});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'){exitAll();set(cur+1)}if(e.key==='ArrowLeft'){exitAll();set(cur-1)}if(e.key==='Escape'){exitAll();set(0)}});
+set(0);
+})();
+</script>

@@ -1,0 +1,1132 @@
+<title>上下文折叠手册</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky chapter rail on the left, 820px reading column, wide widgets break out to full column width.
+   Color: cool paper ground, ink blue-black, teal as the single accent, amber for cost/warning, three tier hues for T1/T2/T3.
+   Type: Bricolage Grotesque for headings, IBM Plex Sans for text, IBM Plex Mono for code and ids. */
+:root{
+  --bg:#f1f4f6; --surface:#ffffff; --surface-2:#e9eef2; --ink:#14202b; --muted:#566676; --line:#d3dbe2;
+  --accent:#0b6e6e; --accent-soft:#d9eeed; --accent-ink:#ffffff;
+  --warn:#a14b06; --warn-soft:#fbe7d2; --bad:#b3261e; --bad-soft:#f8dcd9; --good:#1e7a3c; --good-soft:#d8efde;
+  --t1:#2a68a8; --t2:#7348b0; --t3:#b0521f; --code:#e6ecf1;
+  --font-display:"Bricolage Grotesque","PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+  --font-body:"IBM Plex Sans","PingFang SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e161c; --surface:#16212a; --surface-2:#1e2c37; --ink:#e3eaef; --muted:#92a3b1; --line:#2b3b47;
+  --accent:#4fc1b8; --accent-soft:#143338; --accent-ink:#06201e;
+  --warn:#f0a35e; --warn-soft:#3a2915; --bad:#f08a82; --bad-soft:#40201e; --good:#6fd08c; --good-soft:#163523;
+  --t1:#6aaee8; --t2:#b79af0; --t3:#f0a070; --code:#1c2934; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e161c; --surface:#16212a; --surface-2:#1e2c37; --ink:#e3eaef; --muted:#92a3b1; --line:#2b3b47;
+  --accent:#4fc1b8; --accent-soft:#143338; --accent-ink:#06201e;
+  --warn:#f0a35e; --warn-soft:#3a2915; --bad:#f08a82; --bad-soft:#40201e; --good:#6fd08c; --good-soft:#163523;
+  --t1:#6aaee8; --t2:#b79af0; --t3:#f0a070; --code:#1c2934; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.7 var(--font-body);margin:0}
+a{color:var(--accent)}
+code,.mono{font-family:var(--font-mono);font-size:.86em}
+code{background:var(--code);padding:.08em .38em;border-radius:3px}
+h1,h2,h3{font-family:var(--font-display);text-wrap:balance;line-height:1.2;margin:0}
+.shell{display:grid;grid-template-columns:230px minmax(0,1fr);gap:40px;max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:24px 80px}
+nav.rail{position:sticky;top:env(safe-area-inset-top,0px);align-self:start;max-height:100vh;overflow:auto;padding-block:8px;font-size:13px}
+nav.rail .brand{font:700 18px var(--font-display);margin-bottom:14px}
+nav.rail a{display:block;padding:5px 10px;border-left:2px solid var(--line);color:var(--muted);text-decoration:none;line-height:1.35}
+nav.rail a:hover{color:var(--ink)}
+nav.rail a.on{color:var(--ink);border-left-color:var(--accent);font-weight:600}
+nav.rail .tag{font-size:11px;color:var(--warn)}
+main{min-width:0}
+.hero{padding-block:8px 28px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.hero h1{font-size:clamp(30px,5vw,46px);margin-bottom:12px}
+.hero p{max-width:66ch;color:var(--muted);margin:0 0 10px}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+section.ch{padding-block:36px 8px;border-bottom:1px solid var(--line)}
+section.ch>h2{font-size:clamp(23px,3.4vw,30px);margin-bottom:6px}
+.kicker{font:500 12px var(--font-mono);letter-spacing:.06em;color:var(--accent);text-transform:uppercase;margin-bottom:6px}
+.lead{color:var(--muted);max-width:68ch;margin:6px 0 18px}
+p,li{max-width:70ch}
+h3{font-size:18px;margin:26px 0 8px}
+.badge{display:inline-block;font:500 11px var(--font-mono);padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--muted);vertical-align:1px;white-space:nowrap}
+.badge.code{color:var(--accent);border-color:var(--accent)}
+.badge.paper{color:var(--t2);border-color:var(--t2)}
+.badge.infer{color:var(--warn);border-color:var(--warn)}
+.fig{margin:18px 0;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;min-width:0}
+.fig .scroll{overflow-x:auto}
+.fig svg{display:block;max-width:100%;height:auto;min-width:640px}
+.fig figcaption{font-size:13px;color:var(--muted);margin-top:10px;max-width:80ch}
+svg text{font-family:var(--font-body);font-size:12.5px;fill:var(--ink)}
+svg .mono{font-family:var(--font-mono);font-size:11.5px}
+svg .mut{fill:var(--muted)}
+svg .box{fill:var(--surface);stroke:var(--line);stroke-width:1.3}
+svg .box.core{fill:var(--accent-soft);stroke:var(--accent)}
+svg .box.warn{fill:var(--warn-soft);stroke:var(--warn)}
+svg .ln{stroke:var(--muted);stroke-width:1.4;fill:none}
+svg .ln.acc{stroke:var(--accent);stroke-width:2}
+svg .ln.dash{stroke-dasharray:5 4}
+svg .arrow{fill:var(--muted)}
+svg .zone{fill:none;stroke:var(--line);stroke-dasharray:4 4}
+svg .click{cursor:pointer}
+svg .click:hover .box{stroke:var(--accent)}
+svg .click.sel .box{stroke:var(--accent);stroke-width:2.4}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin:12px 0}
+.panel h4{margin:0 0 6px;font:600 14px var(--font-body)}
+.kv{display:grid;grid-template-columns:96px minmax(0,1fr);gap:4px 12px;font-size:14px}
+.kv dt{color:var(--muted);font-size:12px;padding-top:2px}
+.kv dd{margin:0;max-width:64ch}
+details.dec{background:var(--surface);border:1px solid var(--line);border-radius:6px;margin:8px 0}
+details.dec>summary{cursor:pointer;padding:11px 14px;font-weight:600;list-style:none;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+details.dec>summary::-webkit-details-marker{display:none}
+details.dec>summary::before{content:"+";font:500 15px var(--font-mono);color:var(--accent);width:12px}
+details.dec[open]>summary::before{content:"-"}
+details.dec>.body{padding:2px 16px 14px;border-top:1px solid var(--line);padding-top:12px}
+summary:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,svg .click:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+button,select{font:500 13px var(--font-body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:6px 11px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.on{background:var(--accent-soft);border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.sim{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;margin:16px 0}
+.sim h4{margin:0 0 4px;font:700 16px var(--font-display)}
+.sim .hint{font-size:13px;color:var(--muted);margin:0 0 12px;max-width:72ch}
+.ctrls{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px 22px;margin-bottom:14px}
+.ctrls label{display:block;font-size:12px;color:var(--muted)}
+.ctrls label b{display:block;font:500 13px var(--font-mono);color:var(--ink);margin-bottom:2px}
+.ctrls input[type=range]{width:100%;accent-color:var(--accent)}
+.verdict{border-radius:6px;padding:12px 14px;font-weight:600;margin-bottom:10px}
+.verdict.yes{background:var(--good-soft);color:var(--good)}
+.verdict.no{background:var(--surface-2);color:var(--muted)}
+.verdict small{display:block;font:400 13px var(--font-body);color:var(--ink);margin-top:3px}
+.trace{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+.trace li{display:grid;grid-template-columns:62px minmax(0,1fr);gap:10px;font-size:13px;max-width:none}
+.pill{font:500 11px var(--font-mono);padding:2px 0;text-align:center;border-radius:3px}
+.pill.ok{background:var(--good-soft);color:var(--good)}
+.pill.no{background:var(--surface-2);color:var(--muted)}
+.pill.skip{background:var(--warn-soft);color:var(--warn)}
+.fold{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px}
+.mlist{display:grid;gap:3px;font-size:12.5px}
+.row{display:grid;grid-template-columns:58px 26px minmax(0,1fr) 52px;gap:6px;align-items:center;padding:3px 7px;border:1px solid transparent;border-radius:4px;background:var(--surface-2);cursor:pointer;text-align:left;font:inherit;color:var(--ink)}
+.row .r{font:500 11.5px var(--font-mono);color:var(--muted)}
+.row .k{font:500 10.5px var(--font-mono);color:var(--muted)}
+.row .t{font:11.5px var(--font-mono);color:var(--muted);text-align:right}
+.row span:nth-child(3){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row.user{border-left:3px solid var(--accent)}
+.row.result{border-left:3px solid var(--warn)}
+.row.cov{opacity:.42;text-decoration:line-through}
+.row.sel{outline:2px solid var(--accent);background:var(--accent-soft)}
+.row.prot{border-style:dashed;border-color:var(--muted)}
+.row .flag{font:500 10px var(--font-mono);color:var(--accent)}
+.wire{display:grid;gap:4px;font-size:12.5px}
+.wi{display:grid;grid-template-columns:minmax(0,1fr) 52px;gap:6px;padding:4px 8px;border-radius:4px;background:var(--surface-2);border-left:4px solid var(--line)}
+.wi.hit{border-left-color:var(--accent)} .wi.miss{border-left-color:var(--warn);background:var(--warn-soft)} .wi.new{border-left-color:var(--t1)}
+.wi.sum{font-weight:600}
+.wi .t{font:11.5px var(--font-mono);color:var(--muted);text-align:right}
+.bar{display:flex;height:22px;border-radius:4px;overflow:hidden;background:var(--surface-2);margin:8px 0 6px}
+.bar i{display:block;min-width:2px;border-right:1px solid var(--surface)}
+.bar i.hit{background:var(--accent)} .bar i.miss{background:var(--warn)} .bar i.new{background:var(--t1)}
+.stat{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12.5px;color:var(--muted)}
+.stat b{color:var(--ink);font-family:var(--font-mono);font-weight:500}
+.log{font:12px/1.55 var(--font-mono);background:var(--code);border-radius:5px;padding:9px 11px;margin-top:10px;max-height:230px;overflow:auto}
+.log div{max-width:none}
+.log .bad{color:var(--bad)} .log .note{color:var(--accent)} .log .w{color:var(--warn)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+.tw{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:600;background:var(--surface-2);white-space:nowrap}
+td:first-child{font-weight:600}
+tr:last-child td{border-bottom:0}
+.chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin:12px 0}
+.chip{text-align:left;padding:8px 10px;border-radius:5px;display:grid;gap:1px;line-height:1.3}
+.chip small{font:11px var(--font-mono);color:var(--muted)}
+.chip.on{background:var(--accent-soft);border-color:var(--accent)}
+.chip.opt{border-style:dashed}
+.tier{display:inline-block;font:600 11px var(--font-mono);padding:1px 6px;border-radius:3px;color:#fff}
+.tier.t1{background:var(--t1)} .tier.t2{background:var(--t2)} .tier.t3{background:var(--t3)}
+.road{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.road .panel{margin:0}
+.road .panel p{font-size:13.5px;margin:4px 0}
+.filter{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.callout{border-left:3px solid var(--warn);background:var(--warn-soft);padding:10px 14px;border-radius:0 5px 5px 0;margin:14px 0;font-size:14px;max-width:72ch}
+.callout.ok{border-left-color:var(--accent);background:var(--accent-soft)}
+@media(max-width:900px){
+  .shell{grid-template-columns:minmax(0,1fr);gap:0}
+  nav.rail{position:static;max-height:none;display:flex;flex-wrap:wrap;gap:4px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+  nav.rail .brand{width:100%;margin-bottom:4px}
+  nav.rail a{border:1px solid var(--line);border-radius:99px;padding:3px 10px}
+  nav.rail a.on{border-color:var(--accent)}
+  .fold{grid-template-columns:minmax(0,1fr)}
+}
+@media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style>
+
+<div class="shell">
+<nav class="rail" id="rail" aria-label="章节"><div class="brand">上下文折叠手册</div></nav>
+<main>
+
+<header class="hero">
+  <div class="kicker">以 billion-context 为入口，拆解 Agent 的上下文工程</div>
+  <h1>上下文折叠手册</h1>
+  <p>一个长时间运行的 Agent 要面对的核心矛盾是：任务会一直产生信息，窗口却是定长的。这份手册沿着 billion-context 的实现，逐层拆开每个设计点：选了什么，放弃了什么，付出了什么代价，证据来自哪里。</p>
+  <p>每个"决策卡片"都可以展开；带 <b>模拟器</b> 的章节可以直接动手。数字和结论都标了来源，面试时可以直接据此区分"我读过代码确认"和"作者自报"。</p>
+  <div class="legend">
+    <span class="badge code">代码</span><span class="muted" style="font-size:13px;color:var(--muted)">我读过源码确认</span>
+    <span class="badge paper">论文</span><span style="font-size:13px;color:var(--muted)">作者自报，未独立验证</span>
+    <span class="badge infer">推断</span><span style="font-size:13px;color:var(--muted)">我的理解，面试时按"我的理解"来讲</span>
+  </div>
+</header>
+
+<!-- ===== 0 map ===== -->
+<section class="ch" id="map" data-title="Agent 全景地图">
+  <div class="kicker">第 0 章</div>
+  <h2>Agent 运转的全景地图</h2>
+  <p class="lead">先把一个 Agent 拆成七个关注面，标出这个库覆盖了哪几块。没覆盖的面不是不重要，是下一批要展开的章节（见最后一章）。</p>
+  <figure class="fig">
+    <div class="scroll">
+    <svg viewBox="0 0 860 330" role="img" aria-label="Agent 运转的七个关注面，其中上下文预算管理、请求组装、协议可靠性由本库覆盖">
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="arrow"/></marker></defs>
+      <rect class="zone" x="8" y="8" width="844" height="314" rx="8"/>
+      <text x="20" y="28" class="mut">Agent 运行时</text>
+      <g><rect class="box warn" x="30" y="60" width="150" height="62" rx="6"/><text x="105" y="86" text-anchor="middle">① 主循环</text><text x="105" y="104" text-anchor="middle" class="mut">思考 / 调工具 / 停止</text></g>
+      <g><rect class="box warn" x="30" y="196" width="150" height="62" rx="6"/><text x="105" y="222" text-anchor="middle">② 工具设计与权限</text><text x="105" y="240" text-anchor="middle" class="mut">schema / 配对 / 保护</text></g>
+      <g><rect class="box core" x="260" y="40" width="190" height="62" rx="6"/><text x="355" y="66" text-anchor="middle">③ 请求组装</text><text x="355" y="84" text-anchor="middle" class="mut">视图重建 / 注入 / 缓存稳定</text></g>
+      <g><rect class="box core" x="260" y="128" width="190" height="62" rx="6"/><text x="355" y="154" text-anchor="middle">④ 上下文预算管理</text><text x="355" y="172" text-anchor="middle" class="mut">触发 / 折叠 / 分层 / 恢复</text></g>
+      <g><rect class="box warn" x="260" y="216" width="190" height="62" rx="6"/><text x="355" y="242" text-anchor="middle">⑤ 记忆与委派</text><text x="355" y="260" text-anchor="middle" class="mut">长期记忆 / 子 Agent</text></g>
+      <g><rect class="box core" x="540" y="60" width="200" height="62" rx="6"/><text x="640" y="86" text-anchor="middle">⑥ 协议与可靠性</text><text x="640" y="104" text-anchor="middle" class="mut">签名 / 配对 / 重试 / 身份</text></g>
+      <g><rect class="box warn" x="540" y="196" width="200" height="62" rx="6"/><text x="640" y="222" text-anchor="middle">⑦ 评估与成本</text><text x="640" y="240" text-anchor="middle" class="mut">探针 / 缓存经济学</text></g>
+      <path class="ln" d="M180 91 L258 71" marker-end="url(#ar)"/><path class="ln" d="M355 102 L355 126" marker-end="url(#ar)"/>
+      <path class="ln" d="M450 71 L538 91" marker-end="url(#ar)"/><path class="ln" d="M450 160 L540 110" marker-end="url(#ar)"/>
+      <path class="ln dash" d="M180 227 L258 160" marker-end="url(#ar)"/>
+      <g transform="translate(770,150)"><rect class="box core" x="0" y="0" width="14" height="14" rx="2"/><text x="22" y="12">本库覆盖</text><rect class="box warn" x="0" y="26" width="14" height="14" rx="2"/><text x="22" y="38">待展开</text></g>
+    </svg></div>
+    <figcaption>实线框是本库深入处理的部分；虚线框是只有边缘涉及的部分。③④⑥ 构成这份手册第 1 到 8 章的主体。</figcaption>
+  </figure>
+</section>
+
+<!-- ===== 1 position ===== -->
+<section class="ch" id="position" data-title="代理的位置与两种模式">
+  <div class="kicker">第 1 章 · 请求组装</div>
+  <h2>代理在 Agent 回路里的位置</h2>
+  <p class="lead">客户端每一轮都会把完整历史重放给模型。billion-context 夹在中间，把"客户端持有的完整历史"现算成"这一轮上线的视图"。客户端永远不知道历史被折叠过。</p>
+  <figure class="fig">
+    <div class="scroll">
+    <svg viewBox="0 0 900 360" role="img" aria-label="代理模式下的一轮请求：客户端全量历史进入代理，经会话识别、预压缩、流水线、注入后转发上游；模型返回 compress 调用时由代理本地执行并重新请求上游">
+      <defs><marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="arrow"/></marker></defs>
+      <g><rect class="box" x="14" y="130" width="110" height="80" rx="6"/><text x="69" y="164" text-anchor="middle">Agent 客户端</text><text x="69" y="182" text-anchor="middle" class="mut">持有完整历史</text></g>
+      <rect class="zone" x="160" y="22" width="560" height="316" rx="8"/><text x="174" y="42" class="mut">billion-context 代理</text>
+      <g class="click" data-flow="id" tabindex="0"><rect class="box" x="180" y="66" width="120" height="52" rx="6"/><text x="240" y="90" text-anchor="middle">① 会话识别</text><text x="240" y="106" text-anchor="middle" class="mut">id / 前缀链</text></g>
+      <g class="click" data-flow="pre" tabindex="0"><rect class="box" x="180" y="146" width="120" height="52" rx="6"/><text x="240" y="170" text-anchor="middle">② 预压缩</text><text x="240" y="186" text-anchor="middle" class="mut">输入超窗口时</text></g>
+      <g class="click" data-flow="turn" tabindex="0"><rect class="box core" x="340" y="106" width="150" height="72" rx="6"/><text x="415" y="134" text-anchor="middle">③ processTurn</text><text x="415" y="152" text-anchor="middle" class="mut">内核流水线</text><text x="415" y="167" text-anchor="middle" class="mut">无状态 / 无 I/O</text></g>
+      <g class="click" data-flow="inj" tabindex="0"><rect class="box" x="530" y="106" width="170" height="72" rx="6"/><text x="615" y="134" text-anchor="middle">④ 注入</text><text x="615" y="152" text-anchor="middle" class="mut">压缩工具 / 系统提示</text><text x="615" y="167" text-anchor="middle" class="mut">nudge 文本</text></g>
+      <g class="click" data-flow="loop" tabindex="0"><rect class="box warn" x="340" y="238" width="360" height="60" rx="6"/><text x="520" y="262" text-anchor="middle">⑤ runCompressLoop</text><text x="520" y="280" text-anchor="middle" class="mut">拦截 compress 调用，本地执行，最多再请求 10 轮</text></g>
+      <g><rect class="box" x="776" y="130" width="110" height="80" rx="6"/><text x="831" y="164" text-anchor="middle">上游模型</text><text x="831" y="182" text-anchor="middle" class="mut">prefix cache</text></g>
+      <path class="ln acc" d="M124 160 L178 100" marker-end="url(#a2)"/>
+      <path class="ln" d="M240 118 L240 144" marker-end="url(#a2)"/>
+      <path class="ln" d="M300 172 L338 150" marker-end="url(#a2)"/>
+      <path class="ln" d="M490 142 L528 142" marker-end="url(#a2)"/>
+      <path class="ln acc" d="M700 142 L774 160" marker-end="url(#a2)"/>
+      <path class="ln dash" d="M831 212 L831 268 L702 268" marker-end="url(#a2)"/>
+      <path class="ln dash" d="M340 268 L130 268 L100 214" marker-end="url(#a2)"/>
+      <path class="ln dash" d="M620 238 L620 180" marker-end="url(#a2)"/>
+      <text x="548" y="226" class="mut mono">重新请求</text>
+      <text x="776" y="258" class="mut mono">流式响应</text>
+      <text x="170" y="320" class="mut mono">客户端只看到连续文本流 + 一行可见性标记</text>
+    </svg></div>
+    <figcaption>点击方框查看该步的职责与踩过的坑。虚线是响应路径：模型返回 compress 调用时，代理不转给客户端，而是本地执行后带着结果再次请求上游。</figcaption>
+  </figure>
+  <div class="panel" id="flowPanel" aria-live="polite"></div>
+
+  <h3>两种压缩模式：谁执行 compress，决定摘要怎么上线 <span class="badge code">代码</span></h3>
+  <div class="tw"><table>
+    <tr><th></th><th>插件模式（x-bili-plugin，如 bili pi）</th><th>代理模式（普通客户端）</th></tr>
+    <tr><td>谁执行 compress</td><td>Agent 自己，本地执行</td><td>代理，服务端循环</td></tr>
+    <tr><td>compress 调用在客户端历史里？</td><td>在，是 Agent 自己对话的一部分</td><td>不在，是代理内部的临时往返</td></tr>
+    <tr><td>摘要的载体</td><td>compress 的 tool call 本身</td><td>acp_summary 消息（重新配音为 user）</td></tr>
+    <tr><td>nudge</td><td>代理注入（Agent 没有这个通道）</td><td>代理注入</td></tr>
+    <tr><td>模式如何确定</td><td colspan="2">按请求判定（请求头），按会话粘性绑定，只升不降</td></tr>
+  </table></div>
+  <h3>决策卡片</h3>
+  <div id="dec-position"></div>
+</section>
+
+<!-- ===== 2 identity ===== -->
+<section class="ch" id="identity" data-title="消息身份与对账">
+  <div class="kicker">第 2 章 · 状态正确性</div>
+  <h2>消息身份：折叠状态靠什么认出"同一条消息"</h2>
+  <p class="lead">折叠状态记录的是"哪些消息被哪个块覆盖"。如果客户端下一次重放时消息的身份变了，覆盖就失效，原文会重新涌回线上，摘要却还在。这一章是整个系统最容易出事、也最能体现工程判断的地方。</p>
+  <div class="panel">
+    <h4>基本机制 <span class="badge code">代码</span></h4>
+    <ul>
+      <li>消息身份由内容哈希给出：role、contentType、toolCallId、toolName、text 一起参与，重复内容再加簇后缀。</li>
+      <li>再给每条消息分配稳定短号 <code>m00001</code>…，模型靠它引用范围。<code>assign-refs</code> 是 ref 表唯一的写入者。</li>
+      <li><b>ref 永不复用。</b>摘要会引用旧编号，复用会让 decompress 静默指向别的消息。游标是 <code>已用最大值 + 1</code>，所以宿主不能收缩 ref 表。</li>
+      <li>含无法恢复媒体（只有远程 URL、无字节）的消息得到 <code>BLOCKED</code> ref：不展示、不折叠，因为折叠等于永久销毁。</li>
+    </ul>
+  </div>
+  <div class="sim">
+    <h4>模拟器：客户端改了历史，对账会怎么处理？</h4>
+    <p class="hint">选一种现实里出现过的漂移场景，看哪一层认领它，或者为什么选择不认领。核心取舍：只在有协议级唯一证据或完整规整文本相等时认领，不做模糊相似，因为误归属比漏匹配代价高。</p>
+    <div class="tabs" id="reconTabs" role="tablist"></div>
+    <div id="reconOut"></div>
+  </div>
+  <h3>决策卡片</h3>
+  <div id="dec-identity"></div>
+</section>
+
+<!-- ===== 3 pipeline ===== -->
+<section class="ch" id="pipeline" data-title="每轮流水线">
+  <div class="kicker">第 3 章 · 内核</div>
+  <h2>每轮发生什么：processTurn 流水线</h2>
+  <p class="lead">内核对外只有一个入口。每一轮，宿主把消息和状态传进来，拿回新的视图、新的状态和一个 nudge 决策。内部是一串各管一件事的节点，顺序本身就是设计。</p>
+  <div class="chips" id="chips" role="tablist" aria-label="流水线节点"></div>
+  <div class="panel" id="nodePanel" aria-live="polite"></div>
+  <div class="callout">论文和 DESIGN.md 里写的 <code>merge-blocks</code> 节点，在当前 <code>buildNodes</code> 里已经不存在。虚线框是可选节点（默认关闭或按条件启用）。读文档时以代码为准，这本身就是一条"我真的读过"的证据。<span class="badge code">代码</span></div>
+  <div id="dec-pipeline"></div>
+</section>
+
+<!-- ===== 4 trigger ===== -->
+<section class="ch" id="trigger" data-title="何时压缩：触发策略">
+  <div class="kicker">第 4 章 · 上下文预算管理</div>
+  <h2>何时压缩：增长门控的 nudge</h2>
+  <p class="lead">内核不自己压缩，它只决定"这一轮要不要提醒模型去压"。判断依据是需求侧信号：自上次以来涨了多少、有多少内容已经可以回收，而不是单纯的填充率。</p>
+  <div class="sim">
+    <h4>模拟器：这一轮会不会发 nudge？</h4>
+    <p class="hint">按 decideNudge 的分支复刻（高压带、增长门、首见质量绕过、T1/T2/T3 仲裁、最小收益门）。省略了分层节奏的 cadence 记账。拖动滑块，看哪一道门拦住了它。</p>
+    <div class="ctrls">
+      <label><b id="vLimit"></b>窗口大小<select id="iLimit"><option value="128000">128K</option><option value="200000" selected>200K</option><option value="400000">400K</option><option value="1000000">1M</option></select></label>
+      <label><b id="vStep"></b>增长步长（nudgeGrowthTokens）<select id="iStep"><option value="50000" selected>50K（默认，固定）</option><option value="25000">25K</option><option value="100000">100K</option></select></label>
+      <label><b id="vTok"></b>当前上下文<input type="range" id="iTok" min="0" max="200000" step="2000" value="90000"></label>
+      <label><b id="vGrow"></b>距上次 nudge 的增长<input type="range" id="iGrow" min="0" max="120000" step="1000" value="30000"></label>
+      <label><b id="vT1"></b>T1 有效可压量<input type="range" id="iT1" min="0" max="200000" step="1000" value="60000"></label>
+      <label><b id="vT2"></b>T2 可蒸馏量（T1 摘要总和）<input type="range" id="iT2" min="0" max="200000" step="1000" value="0"></label>
+      <label><b id="vT3"></b>T3 可浓缩量（T2 摘要总和）<input type="range" id="iT3" min="0" max="200000" step="1000" value="0"></label>
+      <label><b>首见质量</b><input type="checkbox" id="iFirst"> 会话刚带着大量历史进来（无基线）</label>
+    </div>
+    <div id="nudgeOut"></div>
+  </div>
+  <h3>Doctrine：让模型"愿意并且会"压缩的六个交互机制 <span class="badge paper">论文</span></h3>
+  <div id="dec-doctrine"></div>
+  <h3>决策卡片</h3>
+  <div id="dec-trigger"></div>
+</section>
+
+<!-- ===== 5 fold ===== -->
+<section class="ch" id="fold" data-title="折叠：压缩与缓存">
+  <div class="kicker">第 5 章 · 上下文预算管理</div>
+  <h2>折叠：区间如何变成块，缓存为什么不碎</h2>
+  <p class="lead">下面是一段 22 条消息的编码会话。你可以选区间压缩，看边界怎么被修正、保护区怎么扣除；再对比"折叠"和"整段重写"两种策略对 prefix cache 的影响。</p>
+  <div class="sim" id="foldSim">
+    <h4>模拟器：折叠 vs 整段重写</h4>
+    <p class="hint">左侧是客户端持有的完整历史（永远不变）。右侧是这一轮实际上线的视图。顶部色条显示相对于上一次请求，有多少前缀字节命中缓存。点两条消息选择区间，或用"推荐区间"。</p>
+    <div class="tabs" id="foldMode"></div>
+    <div class="tabs" id="foldBtns"></div>
+    <div class="fold">
+      <div><div class="mono" style="font-size:12px;color:var(--muted);margin-bottom:6px">客户端历史（点击选范围）</div><div class="mlist" id="mlist"></div></div>
+      <div>
+        <div class="mono" style="font-size:12px;color:var(--muted);margin-bottom:2px">线上视图 wire（相对上一次请求）</div>
+        <div class="bar" id="cbar"></div>
+        <div class="stat" id="cstat"></div>
+        <div class="wire" id="wire" style="margin-top:10px"></div>
+      </div>
+    </div>
+    <div class="log" id="flog" aria-live="polite"></div>
+  </div>
+  <h3>applyCompression 的 11 步 <span class="badge code">代码</span></h3>
+  <div id="dec-apply"></div>
+  <h3>三层金字塔</h3>
+  <figure class="fig">
+    <div class="scroll">
+    <svg viewBox="0 0 860 250" role="img" aria-label="三层折叠：T1 摘要消息区间，T2 蒸馏 T1 块，T3 浓缩 T2 块，每层体积远小于下层">
+      <defs><marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="arrow"/></marker></defs>
+      <rect x="20" y="30" width="520" height="34" rx="4" style="fill:var(--surface-2);stroke:var(--line)"/><text x="30" y="52" class="mono">原始消息 m00001 … m01800（工具输出为主）</text>
+      <rect x="20" y="108" width="260" height="30" rx="4" style="fill:var(--t1);opacity:.85"/><text x="30" y="128" class="mono" style="fill:#fff">T1 块 b1 b2 b3 …</text>
+      <rect x="20" y="170" width="98" height="28" rx="4" style="fill:var(--t2);opacity:.85"/><text x="28" y="189" class="mono" style="fill:#fff">T2 b9</text>
+      <rect x="20" y="218" width="34" height="22" rx="4" style="fill:var(--t3);opacity:.85"/>
+      <path class="ln" d="M150 66 L150 106" marker-end="url(#a3)"/><path class="ln" d="M70 140 L70 168" marker-end="url(#a3)"/><path class="ln" d="M40 200 L40 216" marker-end="url(#a3)"/>
+      <text x="160" y="92" class="mut">模型写摘要 · 中位约 1/8，工具为主的块约 1/24</text>
+      <text x="130" y="158" class="mut">蒸馏 T1 块 · 约 1/4 · 只保留决策、结果、教训</text>
+      <text x="70" y="233" class="mut">浓缩 T2 块 · 约 1/3 · "PR/版本 — ≤8 词结果"</text>
+      <text x="580" y="60" class="mut">范围用 mNNNNN → T1</text><text x="580" y="82" class="mut">范围用 bN..bM → 目标层 +1（最高 T3）</text>
+      <text x="580" y="118" class="mut">生产中 T2 只占 3.5%（60/1711）</text><text x="580" y="140" class="mut">级联蒸馏是安全阀，不是常规路径 <tspan class="mono">[论文]</tspan></text>
+    </svg></div>
+    <figcaption>类 LSM-tree 的分代结构：年轻代吸收写入，老代保存压实后的历史。每层体积远小于下层，摘要总量的增长逐级衰减。</figcaption>
+  </figure>
+  <div id="dec-fold"></div>
+</section>
+
+<!-- ===== 6 stability ===== -->
+<section class="ch" id="stability" data-title="视图稳定性">
+  <div class="kicker">第 6 章 · 请求组装</div>
+  <h2>视图稳定性：摘要放哪里，决定缓存是否存活</h2>
+  <p class="lead">prefix cache 对"字节前缀"敏感，一个字节变了，后面全部失效。所以重建视图时，每条摘要的位置、措辞、角色都要稳定。这一章是 prune 里最费心思的部分，也是仓库里 #2733 这类修复的来源。</p>
+  <figure class="fig">
+    <div class="scroll">
+    <svg viewBox="0 0 880 280" role="img" aria-label="并行工具调用中，摘要锚点不能落在 assistant 的 tool_calls 与其全部 tool 结果之间；应顺延到最后一个结果之后">
+      <defs><marker id="a4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="arrow"/></marker></defs>
+      <text x="14" y="22" class="mut">一个并行工具回合，压缩区间只覆盖了 call A 与 result A</text>
+      <g class="mono">
+        <rect class="box" x="14" y="40" width="150" height="40" rx="4"/><text x="24" y="64">assistant [call A, call B]</text>
+        <rect class="box warn" x="176" y="40" width="96" height="40" rx="4"/><text x="186" y="64">result A</text>
+        <rect class="box" x="284" y="40" width="96" height="40" rx="4"/><text x="294" y="64">result B</text>
+      </g>
+      <text x="14" y="112" style="fill:var(--bad)">错：摘要落在 result A 的位置，tool_calls 之后紧跟的不是它的结果，严格后端 400</text>
+      <g class="mono"><rect class="box" x="14" y="124" width="150" height="40" rx="4"/><text x="24" y="148">assistant [A, B]</text>
+        <rect x="176" y="124" width="96" height="40" rx="4" style="fill:var(--bad-soft);stroke:var(--bad)"/><text x="186" y="148">SUMMARY</text>
+        <rect class="box" x="284" y="124" width="96" height="40" rx="4"/><text x="294" y="148">result B</text></g>
+      <text x="14" y="196" style="fill:var(--good)">对：锚点顺延到最后一个结果之后（pairSafeAnchorIndex）</text>
+      <g class="mono"><rect class="box" x="14" y="208" width="150" height="40" rx="4"/><text x="24" y="232">assistant [A, B]</text>
+        <rect class="box" x="176" y="208" width="96" height="40" rx="4"/><text x="186" y="232">result A*</text>
+        <rect class="box" x="284" y="208" width="96" height="40" rx="4"/><text x="294" y="232">result B</text>
+        <rect x="392" y="208" width="96" height="40" rx="4" style="fill:var(--good-soft);stroke:var(--good)"/><text x="402" y="232">SUMMARY</text></g>
+      <text x="520" y="64" class="mut">同样的约束还有：</text>
+      <text x="520" y="86" class="mut">· 不能切开同一轮 assistant 的</text><text x="520" y="104" class="mut">  reasoning + text + tool_calls</text>
+      <text x="520" y="126" class="mut">· 摘要不能早于首条 user 消息</text>
+      <text x="520" y="148" class="mut">· 锚点按块的"直接范围"算，不按合并范围</text>
+    </svg></div>
+    <figcaption>上图展示的是 pair-safe 锚点。后面两条约束分别对应 DeepSeek thinking 模式的 reasoning_content 回传要求，以及 #2733 的缓存塌陷问题。</figcaption>
+  </figure>
+  <div id="dec-stability"></div>
+</section>
+
+<!-- ===== 7 tool output ===== -->
+<section class="ch" id="toolout" data-title="工具输出治理">
+  <div class="kicker">第 7 章 · 上下文预算管理</div>
+  <h2>工具输出治理：先别让大块进来，再谈压缩</h2>
+  <p class="lead">会话里体积最大的是工具输出，价值密度却最低。除了模型驱动的折叠，系统还有几条更便宜、更确定的减重路径。它们的共同约束是：同一条消息每轮的字节必须一致，否则缓存抖动。</p>
+  <div class="sim">
+    <h4>模拟器：一个工具结果会经过哪些处理？</h4>
+    <p class="hint">选内容类型和体积，看到达时、之后每一轮、以及高压时分别发生什么。可开关 crush（默认关）。</p>
+    <div class="ctrls">
+      <label><b id="vKind"></b>内容类型<select id="iKind"><option value="json">JSON 数组</option><option value="log" selected>构建/测试日志</option><option value="code">源码文件</option><option value="text">其他文本</option></select></label>
+      <label><b id="vSz"></b>体积（token）<input type="range" id="iSz" min="500" max="30000" step="500" value="9000"></label>
+      <label><b id="vUse"></b>此时上下文使用率<input type="range" id="iUse" min="10" max="99" step="1" value="60"></label>
+      <label><b>开关</b><input type="checkbox" id="iCrush"> 启用 crush &nbsp; <input type="checkbox" id="iAbsorb"> 启用 absorb</label>
+    </div>
+    <ul class="trace" id="toolTrace"></ul>
+  </div>
+  <div class="tw"><table>
+    <tr><th>手段</th><th>有损？</th><th>可逆？</th><th>何时发生</th><th>对缓存</th></tr>
+    <tr><td>CCR 入库</td><td>否</td><td>acp_retrieve 取回原文</td><td>到达时一次</td><td>replace-once，之后字节不变</td></tr>
+    <tr><td>crush json-fold</td><td>否（构造上无损）</td><td>可还原</td><td>每轮纯函数</td><td>输入同则输出同</td></tr>
+    <tr><td>crush code-trim / log-select</td><td>是</td><td>否，但保留所有 ERROR/FAIL 行</td><td>每轮纯函数</td><td>与 query 无关，故稳定</td></tr>
+    <tr><td>absorb</td><td>是（模型蒸馏）</td><td>否</td><td>超阈值时强制</td><td>落块后稳定</td></tr>
+    <tr><td>模型折叠 compress</td><td>是</td><td>decompress 恢复</td><td>nudge 之后</td><td>改写折叠点之后的字节</td></tr>
+    <tr><td>emergency-truncate</td><td>是</td><td>否</td><td>使用率 ≥95%</td><td>必然破坏，是最后保险</td></tr>
+  </table></div>
+  <h3>决策卡片</h3>
+  <div id="dec-toolout"></div>
+</section>
+
+<!-- ===== 8 reliability ===== -->
+<section class="ch" id="reliability" data-title="协议与可靠性">
+  <div class="kicker">第 8 章 · 协议与可靠性</div>
+  <h2>协议与可靠性：永远不要发会 400 的请求</h2>
+  <p class="lead">一个压缩系统一旦出错，代价不是"压得不好"，而是整个会话永久不可用。仓库里数百个带编号的修复，绝大多数都落在这一章的几个主题里。</p>
+  <div id="dec-reliability"></div>
+  <div class="callout ok"><b>疏，不是堵。</b>AGENTS.md 把它写成第一原则：修复要消除产生缺陷的机制，而不是在传输途中改写载荷来隐藏症状。典型反例是 #933 到 #1039：为了不让回显标签漏进 TUI 去过滤工具调用参数，结果静默破坏了用户真实写入的内容。</div>
+</section>
+
+<!-- ===== 9 tradeoffs ===== -->
+<section class="ch" id="tradeoffs" data-title="取舍总账与追问">
+  <div class="kicker">第 9 章 · 总账</div>
+  <h2>设计取舍总账</h2>
+  <p class="lead">专家级面试看的是"为什么这么选，另一条路的代价是什么"。这张表把前面所有决策收在一起，可以按关注点过滤。</p>
+  <div class="filter" id="tfilter"></div>
+  <div class="tw"><table id="ttable"><thead><tr><th>关注点</th><th>选择</th><th>放弃的备选</th><th>付出的代价</th><th>证据</th></tr></thead><tbody></tbody></table></div>
+  <h3>面试追问清单</h3>
+  <div id="dec-qa"></div>
+  <h3>必须诚实面对的局限 <span class="badge paper">论文</span></h3>
+  <ul>
+    <li>证据是单用户、观察性数据，没有随机对照；反事实节省部分来自建模。</li>
+    <li>受控试验只用一个评估模型（qwen3.8-27b，temperature 0）；探针题集已饱和（85–95%），质量持平受限于仪器灵敏度。</li>
+    <li>模型自己不会主动恢复已压缩内容，需要明确指示。</li>
+    <li>extreme 配置会 nudge 过度触发、打断任务；作者承认缺少限频这道安全阀。</li>
+    <li>16K 小窗口下，约 2K token 的 doctrine 是约 25% 的固定开销。</li>
+    <li>"逐字历史"类任务（审计、合规、取证）不在支持范围内。</li>
+  </ul>
+</section>
+
+<!-- ===== 10 roadmap ===== -->
+<section class="ch" id="roadmap" data-title="接下来展开什么">
+  <div class="kicker">第 10 章 · 路线</div>
+  <h2>接下来系统展开的章节</h2>
+  <p class="lead">这份手册现在覆盖了上下文管理这条主线。要把整个 Agent 的细节设计学完整，下面这些面还没有展开。每一项都在这个仓库里有可读的入口，告诉我想先挖哪几个，我就按同样的格式（机制图、模拟器、决策卡片、取舍表）加进来。</p>
+  <div class="road" id="road"></div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id)};
+var esc=function(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")};
+var fmt=function(n){return n>=1000?(n/1000).toFixed(n%1000?1:0)+"K":String(n)};
+var BADGE={c:'<span class="badge code">代码</span>',p:'<span class="badge paper">论文</span>',i:'<span class="badge infer">推断</span>'};
+
+/* ---------- rail ---------- */
+var secs=[].slice.call(document.querySelectorAll("section.ch"));
+var rail=$("rail");
+secs.forEach(function(s,i){var a=document.createElement("a");a.href="#"+s.id;a.textContent=i+". "+s.dataset.title;a.dataset.id=s.id;rail.appendChild(a)});
+var links=[].slice.call(rail.querySelectorAll("a"));
+function setOn(id){links.forEach(function(a){a.classList.toggle("on",a.dataset.id===id)})}
+setOn(secs[0].id);
+if("IntersectionObserver" in window){
+  var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)setOn(e.target.id)})},{rootMargin:"-20% 0px -70% 0px"});
+  secs.forEach(function(s){io.observe(s)});
+}
+
+/* ---------- decision cards ---------- */
+function card(d){
+  var rows="";
+  [["选择",d.pick],["备选",d.alt],["为什么",d.why],["代价",d.cost],["位置",d.where]].forEach(function(r){
+    if(r[1])rows+="<dt>"+r[0]+"</dt><dd>"+r[1]+"</dd>";
+  });
+  return '<details class="dec"><summary><span>'+d.t+'</span>'+BADGE[d.e||"c"]+'</summary><div class="body"><dl class="kv">'+rows+'</dl></div></details>';
+}
+function mount(id,list){var el=$(id);if(el)el.innerHTML=list.map(card).join("")}
+
+var DEC={};
+DEC.position=[
+ {t:"做成代理，而不是 SDK 或只做插件",e:"c",
+  pick:"一个本地 HTTP 代理，改 base URL 就能接入；有扩展点的客户端另外提供原生插件。",
+  alt:"只做各家 Agent 的 SDK/插件；或要求客户端自己调内核。",
+  why:"三种主流 wire 协议（Anthropic、OpenAI chat、Responses）加 Gemini，写一次适配就覆盖所有能改 base URL 的客户端。Claude Code 没有进程内扩展点，只能走代理。",
+  cost:"必须逐协议处理流式重写、工具调用拼接、签名块等细节；客户端与代理之间的身份和历史对账变成必修课（第 2 章）；代理成为单点。",
+  where:"src/server.ts、src/server/prepare-*.ts、TECHNICAL-NOTES.md"},
+ {t:"摘要用 user 角色上线，而不是 system 或伪造的 tool call",e:"c",
+  pick:"内核把 acp_summary 渲染成 role=system，代理用 systemToUser 改成 user，位置保持在锚点。",
+  alt:"mid-stream 的 system；伪造一对 assistant tool_calls + tool_result。",
+  why:"SGLang 等严格后端要求只有一条 system 且在首位（#377）。伪造 tool 调用要造 id、声明工具，还要处理没有真实调用的 preflight 块，侵入太大。user 消息可以出现在任何位置。",
+  cost:"语义错位：摘要变成了\"用户说的话\"。靠明确的 [Compressed conversation section] 前缀让模型识别，作者承认这是可容忍的折中。",
+  where:"src/util.ts systemToUser；TECHNICAL-NOTES.md「Why user」"},
+ {t:"客户端始终持有完整历史，压缩是每次现算的视图",e:"i",
+  pick:"不修改客户端的历史，每轮用保存的折叠状态把已折叠区间重新替换成摘要。",
+  alt:"让客户端接受并持久化被压缩后的历史。",
+  why:"代理不需要客户端配合；任何时候出错都可以回退到完整历史；decompress 能还原。",
+  cost:"每轮都要重新对账（折叠状态与客户端回放的历史是否还对得上），这是第 2 章全部复杂度的来源；客户端若自己做 compaction 会与之冲突。",
+  where:"src/fold-reconcile.ts、src/conflict-watch.ts"},
+ {t:"模式按请求判定，按会话粘性绑定",e:"c",
+  pick:"x-bili-plugin 头决定本请求的 pluginMode，会话元数据记录并只允许升级。",
+  alt:"整个代理实例一个模式；或会话内自由切换。",
+  why:"同一代理实例要同时服务插件客户端和普通客户端。会话内降级会让已落地的块失去载体（proxy 创建的块，Agent 视图看不到 acp_summary）。",
+  cost:"出现过\"僵尸插件\"：插件被卸载但窗口还开着，会话粘在插件模式、工具不再注入。靠 self-heal 检测并降级回代理模式。",
+  where:"src/server.ts pluginMode；src/session-self-heal.ts"}
+];
+DEC.identity=[
+ {t:"内容哈希做身份，而不是依赖客户端的稳定 id",e:"c",
+  pick:"id 由 role、contentType、toolCallId、toolName、text 的哈希派生。",
+  alt:"要求客户端提供每条消息的稳定 id；位置序号。",
+  why:"大多数客户端不会给消息稳定 id；位置序号在客户端截断头部时整体错位。内容哈希在\"客户端老老实实重放\"的常态下零配合就能工作。",
+  cost:"任何重序列化（空白、字段顺序、协议切换）都会改变哈希，折叠覆盖失效。整个对账层就是为这个代价买单。",
+  where:"kernel/src/refs.ts、MESSAGE-IDENTITY.md"},
+ {t:"对账坚持保守：不做模糊相似",e:"c",
+  pick:"认领只接受协议唯一 id、完整规整文本相等（同重复序号）、或位置+指纹双证据。",
+  alt:"基于 embedding 或编辑距离的相似度匹配，覆盖更多漂移。",
+  why:"误归属的代价远大于漏匹配：错误地把新内容当作已折叠，会让它从线上消失，模型再也看不到。漏匹配只是原文回到线上，会让上下文变大但不会丢信息。",
+  cost:"覆盖率有上限，对真实编辑和无声明的删除只能老实承认\"没匹配\"，并靠僵尸块回收兜底。",
+  where:"src/fold-reconcile.ts 头部注释"},
+ {t:"ref 永不复用，宁可浪费编号空间",e:"c",
+  pick:"ref 表只增不减；游标是已用最大值加 1；编号上限 9,999,999，超过 99,999 自然加宽。",
+  alt:"压缩时回收并复用编号，保持 ref 短小。",
+  why:"摘要里写着 m00420 这样的引用，模型之后会拿它去 decompress。复用会让引用静默指向别的消息，是最难排查的一类错误。",
+  cost:"ref 空间只增；applyCompactionArchive 在原生 compaction 边界会裁剪 byRaw/byRef，理论上有重发窗口，AGENTS.md 把它列为已知残留。",
+  where:"kernel/src/refs.ts；AGENTS.md「Kernel Contract」"},
+ {t:"没有会话 id 的客户端：用追加哈希链找最长前缀",e:"c",
+  pick:"h_i = sha256(h_{i-1} ‖ msg_i)，找已存链中最长的严格前缀匹配，分叉自动 fork。",
+  alt:"哈希首条用户消息（#286 用过，成了永久碰撞锚点）；按凭证或上游分区。",
+  why:"思路类比 vLLM/SGLang 的 radix prefix cache，用在身份层。前缀匹配会优雅退化：两个会话只在字节完全相同时合并，分叉后各走各的。不按凭证分区，因为凭证、中转、协议都可能在会话中途变化。",
+  cost:"只做头部锚定：客户端截断头部会 fork 出新会话（#1115 删掉了更宽松的尾窗重附，因为它分不清\"同一对话被截断\"和\"另一对话引用了相同内容\"）。",
+  where:"src/prefix-affinity.ts、SESSION-IDENTITY.md"},
+ {t:"同一 id 多人格的宿主：证据白名单式分叉",e:"c",
+  pick:"仅对有流量证据的宿主（dsh 的 classifyRisk）按 id+系统提示哈希分叉出 <id>|sub:<fp>。",
+  alt:"对所有宿主默认开启。",
+  why:"别的宿主里\"系统提示在会话中变化\"意味着同一对话在演进，分叉会无谓重置压缩（#1106）。侧请求（标题生成）也不能抢占锚点，否则主会话被分叉到幽灵会话，所有压缩调用永远失败（#2156）。",
+  cost:"每新增一个这类宿主都要补流量证据，不能偷懒。",
+  where:"src/session-id.ts dshPersonaFingerprintApplies"}
+];
+DEC.pipeline=[
+ {t:"节点式流水线，ref 表单写者",e:"c",
+  pick:"每节点 run(io, ctx) → io，只做一件事；assign-refs 是 ref 的唯一写入者，标签最后派生。",
+  alt:"一个大函数；或让多个阶段各自维护 id 映射。",
+  why:"早期用过 stripHallucinations 创可贴，来源是\"双重真相\"（映射和文本里各有一份）。单写者加最后渲染，消除了这类 bug。每个节点可独立单测，也可组装自定义流水线。",
+  cost:"节点间用 effects 传递隐式数据（如 prune 把 originalMessages 留给 recommend），顺序依赖靠约定。",
+  where:"kernel/src/pipeline.ts、compress.ts buildNodes"},
+ {t:"内核无状态、无 I/O、不调模型",e:"c",
+  pick:"状态是显式入参和出参；摘要文本是 applyCompression 的参数。",
+  alt:"内核自己持久化；内核内置调用模型的摘要器。",
+  why:"这才使内核可以零依赖、跨宿主、可确定性测试（zip 模型：data → data）。外部依赖被收缩成一个字符串。",
+  cost:"宿主必须负责持久化、并发、版本迁移；内核想做\"带外摘要\"（preflight）只能由宿主代劳，所以才有 src/preflight.ts 这一大块。",
+  where:"kernel/DESIGN.md §1-2"},
+ {t:"render-refs 放最后，且按宿主选策略",e:"c",
+  pick:"策略 all / text-only / none；代理用 text-only，只给 user/assistant 文本打标签。",
+  alt:"给所有内容打标签。",
+  why:"代理场景里工具调用参数和工具结果必须保持原样（会被执行或持久化），不能被标签污染。assistant 消息不注入标签，防止模型回显。",
+  cost:"工具结果没有标签时，模型只能靠相邻文本和 acp_status 定位范围。",
+  where:"kernel/src/render-refs.ts"}
+];
+DEC.doctrine=[
+ {t:"① 节流、只压增量",e:"p",pick:"nudge 以 50K 增长为准；若可压质量低于该门槛，有效门槛降为 45%（约 22.5K）。",why:"推迟到增量值得总结时再压，避免过早的小折叠，也让每次压缩只处理刚用完的内容。"},
+ {t:"② 不告诉模型上下文占比",e:"p",pick:"nudge 只含指令和可压区间，不含百分比。",why:"告诉模型\"已用 20%\"，它会以 200K 窗口为锚认为很健康而拒绝压缩。把判断建立在任务上，而不是模型无法校准的数字上。"},
+ {t:"③ 模型有权拒绝",e:"p",pick:"措辞是\"效率提示，不是溢出警告\"。",why:"调试或重构中途强行压缩会毁掉正在使用的内容。拒绝是质量阀，不是失败；后面靠增长门再次触发。"},
+ {t:"④ 压缩时看完整原文，压完即离场",e:"p",pick:"被压区间在 compress 调用时完整可见；调用被消费后由 hide-compress-calls 隐藏。",why:"决策在完整注意力下做出，之后脚手架本身不占后续轮次的上下文。"},
+ {t:"⑤ 推荐列表带真实尺寸",e:"p",pick:"每个候选区间给出 token 数、消息数、工具/文本构成。",why:"试验里去掉尺寸后，模型会去压零散的低价值区间。推荐列表是内核账本与模型判断之间的接口。"},
+ {t:"⑥ 每条消息有唯一编号",e:"p",pick:"范围选择、块血缘、decompress 全部按 ref 寻址。",why:"生产日志显示模型会在范围选择里引用编号；作者还认为稳定的逐条锚点对长上下文注意力本身有益（推测性）。"}
+];
+DEC.trigger=[
+ {t:"增长步长固定为 50K，不随窗口缩放",e:"c",
+  pick:"growthFloor = growthCap = 50000；实际增长门槛 max(20000, 0.45×50000) = 22,500。",
+  alt:"按窗口百分比缩放（例如窗口的 5%）。",
+  why:"#379/#380 的结论是\"增长驱动，没有使用率或计数代理门\"。1M 窗口每 50K 折叠一次是刻意的精简上下文行为，百分比会让大窗口永远不压。",
+  cost:"大窗口用户可能觉得压得太勤；提供逃生口 compress.nudgeGrowthTokens。",
+  where:"kernel/src/config.ts；AGENTS.md KDD#8"},
+ {t:"高压带绕过增长门，但要过\"最小收益\"门",e:"c",
+  pick:"使用率 ≥75% 进入高压带，选可回收量最大的层级；可回收量必须 ≥ max(5000, 1% 窗口)。",
+  alt:"高压时一律发 nudge。",
+  why:"#198：对一个 232 token 的摘要重新蒸馏几乎无收益，却会重置基线，使仍然很热的高压带下一轮再次触发，形成零收益死循环。",
+  cost:"当整个上下文几乎没有可压内容时，nudge 被抑制，只剩 emergency-truncate 兜底，最终可能触发 terminalEscape（建议新开会话）。",
+  where:"kernel/src/compress.ts decideNudge"},
+ {t:"首见质量绕过",e:"c",
+  pick:"无基线、使用率 ≥45%、可压量 ≥50K 时，不必先等一整个增长步长。",
+  alt:"统一按增长门。",
+  why:"#194/#351：会话带着大量历史进来（全量历史重放、状态恢复）时，增长参考值被初始化成当前 token，增长为 0，结果一个已有 93 万可压量的会话闲置 18 分钟直到死掉。",
+  cost:"多一个分支；靠\"模型忽略 nudge 时 shown 戳不清除\"保证不会对无响应会话反复触发。",
+  where:"kernel/src/compress.ts firstSightMassReady"},
+ {t:"按层级仲裁：T1 默认，T2/T3 看质量或块数",e:"c",
+  pick:"T1 有效量 ≥ 阈值发 T1；T2/T3 需质量阈值（1.5× 步长）且大于下层，块数触发默认关闭（1000/2000）。",
+  alt:"块数触发（早期默认值，如 5 个 T1 块就蒸馏）。",
+  why:"#379：块数不是需求信号，10:1 的摘要堆 5 个也没什么可回收，而每次蒸馏会从折叠锚点往后重写线上字节，损失缓存（#1249）。",
+  cost:"T2/T3 很少触发，长会话的摘要区会慢慢变胖，靠第 5 章的分层压缩兜底。",
+  where:"kernel/src/compress.ts"},
+ {t:"模型驱动 vs 引擎固定节奏",e:"p",
+  pick:"模型决定压什么、何时压；引擎只负责提醒和记账。",
+  alt:"固定节奏、引擎选最大区间（试验里的 deterministic 臂）。",
+  why:"重复性负载上固定节奏便宜 37%；但在\"计划只说一次\"的阶段性负载上，默认配置在成本、探针和稳定性上全面更优，且标准差最小。可泛化的是任务条件下的时机和范围判断。",
+  cost:"依赖模型的守约：会自己伪造 📦 压缩标记而没调工具（#717），所以代理会剥掉模型自写的标记行并要求用 acp_status 验证。",
+  where:"论文 §3.7、§8.1"}
+];
+DEC.apply=[
+ {t:"1 清洗摘要",e:"c",pick:"去掉孤立 surrogate。",why:"模型把 \\uXXXX 抄进摘要，JSON.parse 后会得到真实的孤立码元，存入状态后每次序列化都会毒化请求体，严格上游整体拒绝且不可重试（#816）。",where:"scrubLoneSurrogates"},
+ {t:"2 解析边界并分类",e:"c",pick:"每个范围分类为 ok / unknown / consumed / invalid。",why:"区分\"从未存在（别的会话、笔误）\"和\"已被某块吞并\"，给模型不同的纠错提示，而不是笼统的\"太小\"。"},
+ {t:"3 死 ref 墓碑",e:"c",pick:"端点 ref 在本会话已知、但不再对应任何可见或已折叠的消息 → 记入 deadRefs。",why:"#2362：客户端改写或丢弃了消息后，模型会反复重试同一个注定失败的范围，形成自我放大的失败循环。墓碑让回执明确说 DEAD，消息回来时自动清除；byRef 本身不删，维持\"永不复用\"。"},
+ {t:"4 最小范围门",e:"c",pick:"总字符 < minCompressRange（5000）则拒绝；纯 refold 例外。",why:"避免产生一堆不值得的小块（块管理有成本）。"},
+ {t:"5 重叠范围：先到先得",e:"c",pick:"重叠的后一个警告并跳过，不让整批失败。",why:"模型一次提交多个范围时，一个写错不应拖累其他。"},
+ {t:"6 工具配对修正",e:"c",pick:"把区间外的 tool_call 或 tool_result 另一半拉进区间。",why:"孤儿调用或结果会让严格后端 400。预防式：压之前补齐，而不是压之后补救。仅对消息边界生效，块边界不动以保证层级判断正确。",where:"kernel/src/tool-pairs.ts"},
+ {t:"7 保护区软排除",e:"c",pick:"最近 5 条、最近 5000 token、最后一条用户消息从区间剔除，给 warning；剔光才报错。",alt:"硬拒绝整个范围。",why:"模型选范围时略微蹭到近期窗口很常见，整批失败会逼它重试。注意：read、bash 等工具的结果不计入\"最近窗口\"，这样它们刚读完就能被再压（否则最大的体积来源反而被保护起来）。compress 与 acp_rule 永远受保护。",where:"kernel/src/recommend.ts、protected.ts"},
+ {t:"8 回合完整性闸门",e:"c",pick:"若保护区切分导致：保留侧有 tool-call 而推理块被折叠，或 call/result 被拆在两侧 → 整个回合撤回。",why:"DeepSeek thinking 模式要求带 tool_calls 的 assistant 必须带回 reasoning_content；call 与 result 拆开会出现未应答或无来源的 tool_call_id。推荐侧使用同一个 helper，保证\"不会推荐一个必然被清空的范围\"。",where:"kernel/src/turn-integrity.ts"},
+ {t:"9 分层",e:"c",pick:"消息范围 → T1；块范围 → 目标层 +1，最高 T3；被吞并的块置为非活跃，保留 directBlockIds。",why:"血缘使任何再压缩后仍可追溯，decompress 能批量还原整条链。"},
+ {t:"10 活锁守卫",e:"c",pick:"范围内全部消息已被活跃块覆盖 → 不创建\"空块\"，要么原地 refold，要么明确拒绝。",why:"否则会返回 blocksCreated>0 的假成功，视图毫无变化，模型照着回执再发同样的调用，永远循环（billion-context-pi#199）。"},
+ {t:"11 落块与重置",e:"c",pick:"写入 directMessageIds、effectiveMessageIds、stats，并重置 nudge 增长基线。",why:"成功压缩后若不重置基线，刚释放的空间会立刻被判成\"增长\"，造成反馈环。"}
+];
+DEC.fold=[
+ {t:"只压增量，每段内容一生只折叠一次",e:"p",
+  pick:"每次压缩的成本正比于新增内容，而不是历史长度。",
+  alt:"阈值触发后把\"摘要+增量\"整体再总结（Claude Code 式 compaction）。",
+  why:"后者每轮重新抽象早期内容，保留率按 ρ^k 衰减（ρ≈0.4–0.6，4 轮后剩 3–13%）。折叠把保留率钉在约 1/8，不随轮数复合衰减。同时它不重写历史，所以前缀不破。",
+  cost:"单次保留率（约 1/8）低于传统方案的单轮（0.4–0.6）。作者强调它是块级文本保留率，不是信息保真度，保真由 KEEP/DROP 规则保证。",
+  where:"论文 §3.6、§4.2"},
+ {t:"首条用户消息永远钉住",e:"c",
+  pick:"prune 里先判 pin，再判 covered；被块覆盖的首条用户消息仍保留原文。",
+  alt:"允许它被压掉，用摘要代替。",
+  why:"严格后端要求对话以 user 开头；它通常是任务描述，也是缓存前缀的头部。顺序是契约，不是实现细节。",
+  cost:"必须在体积估算里计入这条常常很长的消息；断言\"压缩后首条用户消息消失\"的测试会失败。",
+  where:"kernel/DESIGN.md §8.1"},
+ {t:"decompress-to-file",e:"c",
+  pick:"把块的原文写到文件，让模型用读文件工具读，而不是塞回上下文。",
+  alt:"decompress 内联恢复（也支持）。",
+  why:"内联恢复会把大段原文塞到尾部，推高上下文并改变后续字节。写文件不动前缀，保真度不损。",
+  cost:"依赖模型有读文件能力；论文承认这个规模的模型不会主动恢复，需要明确指示。",
+  where:"src/decompress-shared.ts"},
+ {t:"摘要质量靠写入侧规则，而不是事后校验",e:"c",
+  pick:"KEEP 清单、DROP 清单、优先级；用户原话必须带 ref；任务状态标为\"TASK AS OF THIS BLOCK\"；Open objectives 逐层携带。",
+  alt:"用另一个模型校验摘要。",
+  why:"曾出现摘要里伪造 `user verbatim '合并了 下一个'` 被当作现行任务，造成循环回归（2026-09-06 修订）。把历史标成历史，把未完成目标放在固定位置，比事后检测便宜且可预测。",
+  cost:"规则文本约 2K token，是固定开销；覆盖规则需要 acknowledgeRisk，说明它被当作\"调了几个月的质量资产\"。",
+  where:"kernel/src/compression-rules.ts"}
+];
+DEC.stability=[
+ {t:"#2733：锚点按\"直接范围\"，且永不早于首条用户消息",e:"c",
+  pick:"锚点取块自己折叠的那批 id 的最早位置，再 clamp 到首条用户消息之后。",
+  alt:"用合并后的有效范围取最早位置。",
+  why:"再折叠会把被吞并块的有效 id 并入新块，合并范围往回延伸到祖先覆盖的最早位置。摘要被搬回很早的位置，改写 provider 已缓存的字节，生产中表现为前缀匹配塌回约 11K 的不变头部。",
+  cost:"锚点逻辑多一层概念（direct vs effective）；老的持久化块没有 direct 字段，要回退到 effective。",
+  where:"kernel/src/prune.ts collectSummaryAnchors"},
+ {t:"锚点无法定位时停在尾部，而不是 0",e:"c",
+  pick:"输入里找不到锚点 id 时 insertAt = 末尾。",
+  why:"放在 0 会把摘要插到会话头部之前，推翻缓存前缀，且后续每一轮都如此。",
+  where:"kernel/src/prune.ts"},
+ {t:"nudge/系统提示的注入对轮次不敏感",e:"c",
+  pick:"不因 message 数（例如第一轮）改变是否注入压缩提示；标题生成请求靠 max_tokens ≤200 识别。",
+  alt:"按消息数判断是否是侧请求。",
+  why:"2 条消息的请求只是真实对话的第 1 轮，shouldInject 在第 1、2 轮之间翻转会改写系统提示字节，打断此后每一轮的缓存。",
+  where:"src/server/prepare-openai.ts"},
+ {t:"孤儿清理作为最后一层防线",e:"c",
+  pick:"prune 末尾依次剥离孤儿 tool_call、孤儿 tool_result、孤儿 reasoning。",
+  why:"前面所有预防（配对修正、完整性闸门、pair-safe 锚点）都可能被畸形输入绕过。宁可丢一个孤儿，也不发会 400 的请求。",
+  cost:"属于防御性冗余；compress 调用本身豁免（它可能没有结果）。",
+  where:"kernel/src/prune.ts"},
+ {t:"cache 的度量也要诚实",e:"c",
+  pick:"cache-ledger 的 netSaved 按\"折叠覆盖率\"加权累计，覆盖丢失时冻结（#2202）。",
+  alt:"每个请求都对所有历史折叠计一次节省。",
+  why:"宿主（如 dsh 原生 compaction）在 bili 不知情时删掉了被覆盖的字节，旧计数器在已不存在的基础上继续累加，出现过 netSaved=355M 而 1510 个覆盖 id 已永久消失。",
+  where:"src/cache-ledger.ts、TECHNICAL-NOTES.md"}
+];
+DEC.toolout=[
+ {t:"CCR：到达时入库，原位换成确定性占位符",e:"c",
+  pick:"≥4000 token 的工具结果一次性存入内容仓，可见处替换为两行占位符；找回时原文走 tool result。",
+  alt:"保留原文，等压缩时再处理；或有损蒸馏。",
+  why:"replace-once-at-arrival：之后可见字节永不再变，缓存稳定。无损，模型可凭占位符里的 kind、体积、命令预览判断是否值得取回。客户端重发原文时也重新投影成占位符（#1460）。",
+  cost:"模型需要多一次 acp_retrieve 往返；更大的原文导出成文件指针，让模型分页读。",
+  where:"kernel/src/ccr.ts"},
+ {t:"占位符用严格语法识别，不用子串扫描",e:"c",
+  pick:"整段正文必须与 buildStoredPlaceholder 的两行结构完全一致才算占位符。",
+  alt:"includes(\"[acp-stored\")。",
+  why:"文档、日志、源码里完全可能提到这个标记，子串扫描会误判而跳过存储或压缩（#1456）。",
+  cost:"残留歧义：用户内容恰好逐字等于规范占位符，纯文本协议无法区分，作者明确标注为超范围。",
+  where:"kernel/src/ccr.ts parseStoredPlaceholder"},
+ {t:"crush 与查询无关",e:"c",
+  pick:"策略对 (载荷, 配置) 是纯函数；不做 query 感知的相关性选择。",
+  alt:"headroom 的\"layer b\"：按当前问题挑相关行。",
+  why:"宿主每轮重发工具结果，若结果随问题变化，每轮字节都不同，缓存失效。确定性比命中率更重要。",
+  cost:"压得没有 query-aware 方案狠。",
+  where:"kernel/src/crush.ts 头部注释"},
+ {t:"crush 一律 fail-open，且内核强制保留错误行",e:"c",
+  pick:"解析失败、扫描器退出、低置信度、插件异常、收益不足 → 原样放行；有损日志压缩必须保留输入里所有 ERROR/FAIL 行，否则整个结果被拒。",
+  alt:"fail-closed，出错就报错。",
+  why:"压缩是优化而非正确性前提，不能因此让一轮请求失败。错误行是日志里价值最高的信息，由内核而不是各插件自己负责守住。",
+  cost:"异常被静默吞掉，需要靠日志观察。",
+  where:"kernel/src/crush.ts"},
+ {t:"最后保险：emergency-truncate 与 terminalEscape",e:"c",
+  pick:"使用率 ≥95% 截断工具输出（保留首尾各 2000 字符），连续 3 次\"无可行压缩且截不动\"发出终止信号。",
+  why:"模型驱动的压缩有可能永远不发生（不理 nudge，或无内容可压）。需要一个不依赖模型的硬阀。不可恢复的下限（系统提示加工具定义就超窗口）要明确告诉用户，而不是无限空转。",
+  where:"kernel/src/compress.ts emergencyTruncateNode"}
+];
+DEC.reliability=[
+ {t:"签名的 thinking 块：永不改写 (KDD#10)",e:"c",
+  pick:"Anthropic thinking/redacted_thinking、Gemini thoughtSignature 字节级原样转发，累积的重请求体也原样。",
+  alt:"对思考通道做提示词标签过滤（#1882 做过）。",
+  why:"回放最新 assistant 消息时按字节验签。任何改写（去标签、去重、重排、丢空段）都让文本与签名失配，会话先在同轮重请求时 400，随后因客户端回显而永久 400。",
+  cost:"思考通道里回显的内部标签无法清理；这被定义为宿主注入侧（renderTags 策略）的问题。任何未来涉及思考载荷的改动都要有两种签名 wire 上的字节相等测试。",
+  where:"AGENTS.md KDD#10；src/loop/*"},
+ {t:"工具调用参数：字节级原样 (#1039)",e:"c",
+  pick:"任何会被执行或持久化的载荷不经过任何过滤器。",
+  alt:"在流里剥掉模型回显的渲染标签（#933）。",
+  why:"形状过滤器分不清\"回显\"和用户真正想写入的字面量（bash 命令、文件内容），任何\"清理\"都会静默损坏数据。回显出现在 TUI 里只是视觉噪音。",
+  cost:"噪音要在注入侧解决。这是\"疏不堵\"的教科书案例。",
+  where:"src/loop/tag-echo-filter.ts 头部"},
+ {t:"wire 约束账本只增不减",e:"c",
+  pick:"每个上游拒绝过的形状（例如 Anthropic 拒绝 input_schema 顶层的 oneOf/allOf/anyOf）永久写入测试账本、带来源，并在对应的校验假上游里强制。",
+  why:"生产里学到的约束最贵，遗忘它们等于重复踩坑。黄金文件锁住内核行为常量，更新需要书面理由。",
+  where:"tests/wire-contract*.ts、tests/golden/wire-contract/"},
+ {t:"preflight：输入本身超窗口时转发前先压",e:"c",
+  pick:"独立的摘要调用，块大小约窗口 60%，最多 16 轮；净收缩验收（候选摘要必须小于所覆盖区间，容忍 1.05×）；空答复分三类处理。",
+  alt:"直接转发，让上游拒绝。",
+  why:"用户从 1M 窗口模型切到 260K 时，请求本身就溢出，上游拒绝，模型永远看不到 nudge，会话卡死（#247）。弱摘要器会越压越大（#1819），所以必须验收。",
+  cost:"每次摘要调用要花 15–30 秒，客户端约 300 秒就断连。",
+  where:"src/preflight.ts"},
+ {t:"极端溢出时用确定性摘要代替模型摘要",e:"c",
+  pick:"溢出 >19 倍窗口时，改用 CPU-only 的结构化摘要（deterministicDigest），原文仍可 decompress。",
+  alt:"继续用模型逐段摘要。",
+  why:"dsh 一次重放 509 万 token 到 24 万窗口，约需 45 次折叠，而轮次上限 32、客户端 300 秒断连，用户永远重试。此时折叠只需是一个\"合法的块\"，原文可恢复。触发阈值从本循环自己的覆盖数学推出，没有新增配置面。",
+  where:"src/preflight.ts EMERGENCY_FOLD_COVERAGE"},
+ {t:"循环里的重试各有独立预算",e:"c",
+  pick:"可见文本已转发后断流 → 带续写提示的重取，引用已转发的尾部 800 字符；不可见断流 → 盲重取；退化响应 → 单独一次。",
+  why:"可见文本已经给了客户端，盲重取会让答案在客户端面前从头再长一遍。两种重试形态共用预算会互相吃掉机会。续写提示是临时的，不入会话状态。",
+  where:"src/loop/core.ts"},
+ {t:"自愈：检测卡死的会话并降级",e:"c",
+  pick:"连续 5 轮被 nudge、无头、无 bili 工具声明、无压缩收益 → 降级回代理模式；nudge 空转 → 抑制；非流式摘要被网关 524/504 杀死 → 学到改用流式。",
+  why:"在没有人工介入的情况下，长会话必须能从\"插件被卸载\"\"网关掐连接\"这类状态里自己恢复，且转移要可观察（会话详情里有 heal 徽标）。",
+  where:"src/session-self-heal.ts、TECHNICAL-NOTES.md"}
+];
+DEC.qa=[
+ {t:"为什么不像 Claude Code 那样阈值触发一次性 compaction？",e:"p",why:"三个同源缺陷：模型无感知、不能拒绝、只能单一粒度。更关键的是每轮重写历史，保留率按 ρ^k 衰减，而且整个 prefix cache 失效。折叠只压增量，保留率恒定，前缀字节不动。"},
+ {t:"摘要有损，丢了关键信息怎么办？",e:"c",why:"三层兜底：写入侧 KEEP 规则（决策加理由、路径行号、报错原文、Open objectives）；每个块可 decompress，血缘保证多次再压缩后仍可追溯；大工具结果走 CCR 无损入库。诚实的局限是模型不会主动恢复。"},
+ {t:"怎么保证 prefix cache 不被破坏？",e:"c",why:"历史只追加；锚点稳定（按直接范围、不早于首条用户消息）；注入字节对轮次不敏感；CCR replace-once；crush 与 query 无关；摘要重新配音为 user 以保持首条 system 字节稳定。第 5 章模拟器可以直接看到折叠与重写的差别。"},
+ {t:"客户端把历史重序列化了怎么办？",e:"c",why:"分级保守对账：前后缀精确 id → 协议稳定的 toolCallId → 规整文本相等 → 位置指纹 → assistant 回合键 → 图片能力变体。对不上的诚实地放回线上，再用僵尸块回收兜底。不做模糊匹配，因为误归属比漏匹配贵。"},
+ {t:"这套东西怎么评估？",e:"p",why:"作者用召回探针（含深度召回）、重读调用次数（交互成本）、计费 token、cache 命中、语料分析。我会补充：与阈值 compaction 在同一份真实会话回放上对照、跨模型迁移、摘要的人评或 LLM-judge、恢复延迟，并引入随机对照。"},
+ {t:"最大的风险是什么？",e:"i",why:"摘要的不可验证性与模型守约依赖；系统复杂度极高（多协议、会话身份、折叠对账，带编号的修复数以百计）；证据是单用户观察数据。改进方向：给 nudge 限频，把 doctrine 蒸馏进权重省掉提示 token，对摘要做自动一致性校验（例如检查 Open objectives 是否被丢）。"}
+];
+
+[["position","dec-position"],["identity","dec-identity"],["pipeline","dec-pipeline"],["doctrine","dec-doctrine"],["trigger","dec-trigger"],["apply","dec-apply"],["fold","dec-fold"],["stability","dec-stability"],["toolout","dec-toolout"],["reliability","dec-reliability"],["qa","dec-qa"]].forEach(function(p){mount(p[1],DEC[p[0]])});
+
+/* ---------- ch1 flow panel ---------- */
+var FLOW={
+ id:{t:"① 会话识别",d:[["做什么","优先用客户端自带的稳定 id；没有就用前缀哈希链找最长前缀；同一 id 多人格的宿主再按系统提示分叉。"],["踩过的坑","按首条用户消息哈希会成为永久碰撞锚点（#286）；侧请求（标题生成）抢占锚点会让主会话分叉到幽灵会话（#2156）。"],["位置","src/session-id.ts、src/prefix-affinity.ts"]]},
+ pre:{t:"② 预压缩 preflight",d:[["做什么","输入本身超窗口时，转发前先发独立的摘要调用把最老区间压掉。"],["为什么","否则上游直接拒绝，模型看不到 nudge，会话卡死。"],["取舍","溢出 >19 倍窗口时用确定性摘要，不再调模型。"],["位置","src/preflight.ts"]]},
+ turn:{t:"③ processTurn",d:[["做什么","纯函数：消息 + 状态 → 新视图 + 新状态 + nudge 决策。"],["为什么在这里","内核零依赖，所以所有 I/O、模型调用、协议细节都留在它外面。"],["位置","kernel/src/compress.ts（见第 3 章）"]]},
+ inj:{t:"④ 注入",d:[["做什么","把视图转回对应协议，必要时注入 compress / decompress / search_context / acp_status 工具、系统提示和 nudge 文本。"],["插件模式","Agent 自己注册工具，代理只注入 nudge。"],["注意","注入的字节必须对轮次不敏感（第 6 章）。"],["位置","src/server/prepare-*.ts、src/server/inject.ts"]]},
+ loop:{t:"⑤ runCompressLoop",d:[["做什么","上游流式响应里出现 compress 调用时，不转给客户端：本地 applyCompression，再带着结果重新请求上游，最多 10 轮。"],["一并处理","断流续写、退化响应重试、网关 524/504、thinking 签名 400、模型自写的伪造压缩标记。"],["位置","src/loop/core.ts"]]}
+};
+function showFlow(k){
+  var f=FLOW[k];$("flowPanel").innerHTML="<h4>"+f.t+"</h4><dl class='kv'>"+f.d.map(function(r){return "<dt>"+r[0]+"</dt><dd>"+r[1]+"</dd>"}).join("")+"</dl>";
+  [].forEach.call(document.querySelectorAll("[data-flow]"),function(g){g.classList.toggle("sel",g.dataset.flow===k)});
+}
+[].forEach.call(document.querySelectorAll("[data-flow]"),function(g){
+  g.setAttribute("role","button");
+  g.addEventListener("click",function(){showFlow(g.dataset.flow)});
+  g.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();showFlow(g.dataset.flow)}});
+});
+showFlow("turn");
+
+/* ---------- ch2 reconcile ---------- */
+var RECON=[
+ {n:"空白/Unicode 规整变化",hit:"规整文本相等",res:"repaired",d:"客户端重启后把 tool_result 的空白或换行重新编码，内容哈希变了。",how:"NFC 加空白折叠后文本逐字相等，且在 churn 区内按第 k 次出现对第 k 次出现配对，才认领，并把块里的 id 从旧改成新。",why:"这种漂移只改格式不改语义，完整规整相等是足够强的证据。"},
+ {n:"tool_result 重编码，toolCallId 保留",hit:"toolCallId 认领",res:"repaired",d:"文本内容被重新序列化，但 tool_use.id 不变。",how:"toolCallId 是协议层唯一的 id，跨重序列化稳定，直接认领。",why:"协议级唯一证据，比文本更可靠，所以排在文本匹配之前。"},
+ {n:"首尾未变，中间若干条改动",hit:"前后缀精确锚定",res:"repaired",d:"大部分 id 完全一致，只有一段区域漂移。",how:"先用精确 id 的前缀和后缀把旧、新两次 pass 对齐，只在中间的 churn 区里做配对。",why:"缩小搜索范围，同时让\"同一个重复序号\"这个约束有意义。"},
+ {n:"整个历史换协议（openai ↔ anthropic）",hit:"位置身份 Pass 0 (#2480)",res:"repaired",d:"参数编码、toolCallId 方案全变，所有 id 和所有锚点同时失效。",how:"bili 自己保存一份按位置对齐的\"规范指纹\"（去掉协议易变字段）。位置是所有权证据，指纹只作每格的置信度比较，每个认领都要两者一致。",why:"此前的启发式每次只能修一个边界，永远修不完（#2454）。"},
+ {n:"跨模型回放，thinking 被内联成纯文本",hit:"assistant 回合键 Pass 3 (#2636)",res:"repaired",d:"同一轮在同模型里是 reasoning+text 两个核心，跨模型里变成合并的一条文本，形状 N↔1。",how:"用完整规整后的回合文本做键，两种方向都能认领（两个旧 id 认领同一个新 id，或反过来）。",why:"严格相等，不模糊。位置对齐在形状变化的第一格就停了。"},
+ {n:"切到纯文本模型，图片被占位符替换",hit:"图片能力变体 Pass 4 (#2636)",res:"repaired",d:"覆盖过的用户文本在 `text` 与 `text + 占位符行` 之间来回切换。",how:"对锚点的规整身份尝试\"去掉/追加一行占位符\"后再比较。",why:"只放宽一个已知的、固定文本的变体。"},
+ {n:"宿主改写了 toolCallId（call_x|fc_0 → call_x_fc_0）",hit:"仅检测，不配对 (#2396)",res:"detect",d:"provider 投影在两侧都重新清洗了复合 id。",how:"两个认领 pass 都以 toolCallId 为键，这时全部失败。只统计\"存在内容相同、id 不同的孪生\"，让漂移日志指出原因。",why:"在没有宿主知识的情况下配对等于猜测，而误归属是最贵的失败。"},
+ {n:"用户真的编辑了某条已折叠的消息",hit:"不认领",res:"honest",d:"那条消息的文本确实变了。",how:"没有任何 pass 的证据成立。原文重新进入线上，摘要仍在。",why:"这是正确行为：真实的编辑不应被当作未变化。代价是线上暂时变大。"},
+ {n:"宿主在没有声明边界的情况下删掉大段历史",hit:"僵尸块回收 (#2695)",res:"reap",d:"被覆盖的底层消息永远不会回来，但重复内容的重新派生让一个残留 id 一直活着，syncBlocks 反复重新激活该块，它的摘要载体每轮在列表中间闪烁。",how:"逐块统计\"多数被覆盖 id 缺失\"的连续 pass 数，达到阈值后回收该块（从 state.blocks 移除，保留归档语义和 blockContents）。仅代理模式；要求 e==1（曾验证存在）。",why:"闪烁的摘要是永久的缓存破坏者。插件模式下折叠本就会替换覆盖的历史，所以不适用。"}
+];
+var rt=$("reconTabs");
+RECON.forEach(function(r,i){var b=document.createElement("button");b.textContent=r.n;b.setAttribute("role","tab");b.addEventListener("click",function(){showRecon(i)});rt.appendChild(b)});
+function showRecon(i){
+  var r=RECON[i];
+  [].forEach.call(rt.children,function(b,j){b.classList.toggle("on",i===j)});
+  var cls={repaired:"yes",detect:"no",honest:"no",reap:"no"}[r.res];
+  var lab={repaired:"已修复：折叠保持有效",detect:"仅检测：不修复，日志写明原因",honest:"诚实不认领：原文回到线上",reap:"回收：把无法再覆盖的块移除"}[r.res];
+  $("reconOut").innerHTML='<div class="verdict '+cls+'">'+lab+'<small>处理层：'+r.hit+'</small></div><dl class="kv"><dt>场景</dt><dd>'+r.d+'</dd><dt>怎么处理</dt><dd>'+r.how+'</dd><dt>为什么这样取舍</dt><dd>'+r.why+'</dd></dl>';
+}
+showRecon(0);
+
+/* ---------- ch3 pipeline ---------- */
+var NODES=[
+ {n:"reconcile-live-ids",o:0,does:"把客户端回放里已被折叠消息的\"旧 id\"重新认回。上一轮的入站 id 快照在状态里。",why:"放第一位：后面所有节点都依赖稳定 id。",rm:"回放一变，覆盖立即失效。",code:"kernel/src/instance-reid.ts"},
+ {n:"assign-refs",o:0,does:"给新消息分配 mNNNNN。游标 = 已用最大值 + 1。受保护或含不可恢复媒体的消息得到 BLOCKED。",why:"ref 表的唯一写入者；标签只在最后派生。",rm:"引用无从谈起。",code:"kernel/src/refs.ts、compress.ts assignRefsNode"},
+ {n:"sync-blocks",o:0,does:"根据本轮可见的消息重算块的 active；被别的块吞并的块置为非活跃；用户已 decompress 的（expanded）保持关闭；advanceSurvival 做年轻代到老代的晋升。",why:"必须在 prune 之前，prune 依赖\"哪些块活着\"。",rm:"已 decompress 的块下一轮会被重新折叠，白白多花一轮成本且丢失原文。",code:"kernel/src/sync.ts"},
+ {n:"prune",o:0,does:"删掉被活跃块覆盖的消息，在锚点插入摘要；首条用户消息钉住；末尾做孤儿清理。同时把剪枝前的消息数组放进 effects.originalMessages。",why:"在 CCR 与 crush 之前：它们只应处理仍然可见的内容。",rm:"没有折叠效果。",code:"kernel/src/prune.ts"},
+ {n:"ccr-store",o:0,does:"≥4000 token 的工具结果入库，原位换成两行占位符；重发原文时重新投影。",why:"放在 prune 之后，只处理还留在线上的内容。",rm:"大工具结果继续占着上下文。",code:"kernel/src/ccr.ts"},
+ {n:"absorb-hide",o:1,does:"隐藏已被模型\"吸收\"蒸馏的消息。",why:"仅当状态里有 absorbed 记录时启用。",rm:"已蒸馏的原文回到线上。",code:"kernel/src/absorb.ts"},
+ {n:"crush",o:1,does:"确定性机械压缩：json-fold（无损）、code-trim、log-select（有损，保留所有错误行）。",why:"默认关闭；纯函数，不动状态。",rm:"少一层便宜的前置减重。",code:"kernel/src/crush.ts"},
+ {n:"absorb-prompt",o:1,does:"对仍超阈值的工具结果追加强制蒸馏提示。",why:"晚于 crush：先机械压，仍超标才让模型蒸馏（两阶段门）。",rm:"没有强制蒸馏路径。",code:"kernel/src/absorb.ts"},
+ {n:"filter",o:0,does:"按角色和内容类型的可见性规则。",why:"这些规则放在内核里而不是提示词里：提示可以\"请求\"压缩任何东西，但内核强制保底。",rm:"保护规则失去强制力。",code:"kernel/src/filter/"},
+ {n:"hide-compress-calls",o:0,does:"隐藏已被消费的 compress 工具调用。",why:"摘要已经承载信息，脚手架不应占后续轮次的上下文。",rm:"每次压缩的调用和结果永久留在上下文。",code:"kernel/src/hide-consumed.ts"},
+ {n:"recommend",o:0,does:"计算保护区和可压缩区间，给出带真实尺寸的推荐列表；mergeRangesToThreshold 把碎片并成值得压的区间。",why:"在 nudge 之前：nudge 的判断依赖这里的\"有效可压量\"。",rm:"nudge 没有依据，模型也没有候选列表。",code:"kernel/src/recommend.ts"},
+ {n:"nudge-inject",o:0,does:"decideNudge，并更新基线戳。上下文大幅下降（宿主 compaction）时重置节奏。",why:"在 emergency-truncate 之前：先给模型一次主动压缩的机会，再动用硬阀。",rm:"不再有主动压缩。",code:"kernel/src/compress.ts"},
+ {n:"emergency-truncate",o:0,does:"使用率 ≥95% 时截断大工具输出；连续 3 次无可行压缩且截不动 → terminalEscape。",why:"最后一道不依赖模型的保险。",rm:"一旦模型不压，会话直接撞窗口。",code:"kernel/src/truncate-tools.ts"},
+ {n:"render-refs",o:0,does:"把 ref 标签注入文本（策略 all / text-only / none）。",why:"最后一步：标签是派生的，不是真相来源。",rm:"模型看不到可引用的编号。",code:"kernel/src/render-refs.ts"}
+];
+var ch=$("chips");
+NODES.forEach(function(nd,i){
+  var b=document.createElement("button");b.className="chip"+(nd.o?" opt":"");b.setAttribute("role","tab");
+  b.innerHTML='<small>'+String(i+1).padStart(2,"0")+(nd.o?" 可选":"")+'</small><span>'+nd.n+'</span>';
+  b.addEventListener("click",function(){showNode(i)});ch.appendChild(b);
+});
+function showNode(i){
+  var nd=NODES[i];
+  [].forEach.call(ch.children,function(c,j){c.classList.toggle("on",i===j)});
+  $("nodePanel").innerHTML='<h4 class="mono">'+nd.n+'</h4><dl class="kv"><dt>做什么</dt><dd>'+nd.does+'</dd><dt>为什么在这个位置</dt><dd>'+nd.why+'</dd><dt>拿掉的后果</dt><dd>'+nd.rm+'</dd><dt>位置</dt><dd><code>'+nd.code+'</code></dd></dl>';
+}
+showNode(3);
+
+/* ---------- ch4 nudge sim ---------- */
+function nudgeDecide(p){
+  var limit=p.limit,usage=p.tok/limit,step=p.step;
+  var minBenefit=Math.max(5000,Math.round(limit*0.01));
+  var gFloor=Math.max(20000,0.45*step);
+  var over=usage>=0.75,emerg=usage>=0.95;
+  var maxP=Math.max(p.t1,p.t2,p.t3);
+  var first=p.first&&usage>=0.45&&maxP>=step;
+  var gReady=first||p.grow>=gFloor;
+  var th2=Math.round(step*1.5);
+  var tr=[];
+  var pc=function(x){return Math.round(x*100)+"%"};
+  tr.push([over?"ok":"no","使用率 "+pc(usage)+(emerg?"，≥95% 紧急":over?"，≥75% 进入高压带":"，低于 75% 高压带")]);
+  var inj=null,reason="";
+  if(over){
+    var best=null,bp=0;
+    [[1,p.t1],[2,p.t2],[3,p.t3]].forEach(function(x){if(x[1]>bp){bp=x[1];best=x[0]}});
+    tr.push(["skip","高压带绕过增长门与节奏"]);
+    tr.push([bp>=minBenefit?"ok":"no","最小收益门：最大可回收 "+fmt(bp)+(bp>=minBenefit?" ≥ ":" < ")+fmt(minBenefit)+" (max(5K, 1% 窗口))"]);
+    if(best!==null&&bp>=minBenefit){inj=best;reason=(emerg?"EMERGENCY":"OVER-LIMIT")+" T"+best+"：最大有效可回收 "+fmt(bp)}
+    else reason=(emerg?"EMERGENCY":"OVER-LIMIT")+"：使用率很高，但可回收量低于收益门，nudge 被抑制。此时只剩 emergency-truncate 兜底。";
+  }else{
+    tr.push([gReady?"ok":"no",first?"首见质量绕过：无基线、使用率 ≥45%、可压量 ≥ "+fmt(step):"增长 "+fmt(p.grow)+(p.grow>=gFloor?" ≥ ":" < ")+"增长门 "+fmt(gFloor)+" (max(20K, 0.45×步长))"]);
+    if(gReady){
+      var t1ok=p.t1>=step;
+      tr.push([t1ok?"ok":"no","T1 有效可压量 "+fmt(p.t1)+(t1ok?" ≥ ":" < ")+"步长 "+fmt(step)]);
+      if(t1ok){inj=1;reason="T1：有效可压量 "+fmt(p.t1)+"，增长 "+fmt(p.grow)}
+      else{
+        var t2ok=p.t2>=th2&&p.t2>p.t1;
+        tr.push([t2ok?"ok":"no","T2："+fmt(p.t2)+"，需 ≥ "+fmt(th2)+"（1.5×步长）且大于 T1 有效量 "+fmt(p.t1)]);
+        if(t2ok){inj=2;reason="T2 蒸馏：T1 摘要共 "+fmt(p.t2)}
+        else{
+          var t3ok=p.t3>=th2&&p.t3>p.t2&&p.t3>p.t1;
+          tr.push([t3ok?"ok":"no","T3：需 ≥ "+fmt(th2)+" 且大于 T2、T1"]);
+          if(t3ok){inj=3;reason="T3 浓缩：T2 摘要共 "+fmt(p.t3)}
+        }
+      }
+    }
+    if(inj===null)reason=gReady?"没有任何一层达到各自阈值。":"增长不足，先等。压缩要等任务消费出一段值得折叠的增量。";
+  }
+  return {inj:inj,reason:reason,tr:tr,first:first};
+}
+var NI={limit:$("iLimit"),step:$("iStep"),tok:$("iTok"),grow:$("iGrow"),t1:$("iT1"),t2:$("iT2"),t3:$("iT3"),first:$("iFirst")};
+function renderNudge(){
+  var limit=+NI.limit.value;
+  NI.tok.max=limit;if(+NI.tok.value>limit)NI.tok.value=limit;
+  var p={limit:limit,step:+NI.step.value,tok:+NI.tok.value,grow:+NI.grow.value,t1:+NI.t1.value,t2:+NI.t2.value,t3:+NI.t3.value,first:NI.first.checked};
+  $("vLimit").textContent=fmt(limit);$("vStep").textContent=fmt(p.step);$("vTok").textContent=fmt(p.tok)+" ("+Math.round(p.tok/limit*100)+"%)";
+  $("vGrow").textContent=fmt(p.grow);$("vT1").textContent=fmt(p.t1);$("vT2").textContent=fmt(p.t2);$("vT3").textContent=fmt(p.t3);
+  var r=nudgeDecide(p);
+  var tl={1:"T1",2:"T2",3:"T3"};
+  $("nudgeOut").innerHTML='<div class="verdict '+(r.inj?"yes":"no")+'">'+(r.inj?"注入 nudge · "+tl[r.inj]:"本轮不注入 nudge")+'<small>'+r.reason+'</small></div><ul class="trace">'+r.tr.map(function(t){return '<li><span class="pill '+t[0]+'">'+({ok:"通过",no:"未通过",skip:"绕过"})[t[0]]+'</span><span>'+t[1]+'</span></li>'}).join("")+'</ul>';
+}
+Object.keys(NI).forEach(function(k){NI[k].addEventListener("input",renderNudge);NI[k].addEventListener("change",renderNudge)});
+renderNudge();
+
+/* ---------- ch5 fold sim ---------- */
+var SYS=2000,MINCHARS=5000,PRES_N=5,PRES_TOK=5000;
+var NOPRES={read:1,bash:1,decompress:1,search_context:1};
+var BASE=[
+ ["user","text",null,null,120,"修复登录超时 bug"],
+ ["assistant","text",null,null,300,"先读 auth.ts，再跑测试"],
+ ["assistant","call","read","c1",60,"read auth.ts"],
+ ["tool","result","read","c1",6200,"auth.ts 全文"],
+ ["assistant","call","bash","c2",70,"bash npm test"],
+ ["tool","result","bash","c2",9800,"测试输出（失败 3 项）"],
+ ["assistant","text",null,null,400,"超时来自 token 刷新竞态"],
+ ["assistant","call","grep","c3",60,"grep refreshToken"],
+ ["tool","result","grep","c3",3100,"23 处匹配"],
+ ["assistant","text",null,null,350,"计划：加互斥锁"],
+ ["assistant","call","edit","c4",420,"edit auth.ts"],
+ ["tool","result","edit","c4",200,"已修改"],
+ ["assistant","call","bash","c5",70,"bash npm test"],
+ ["tool","result","bash","c5",7400,"测试输出（通过）"],
+ ["assistant","text",null,null,250,"已修复并通过"],
+ ["user","text",null,null,80,"再加个单测"],
+ ["assistant","call","read","c6",60,"read auth.test.ts"],
+ ["tool","result","read","c6",2500,"auth.test.ts"],
+ ["assistant","text",null,null,200,"加在 refresh 用例后"],
+ ["user","text",null,null,40,"跑一下"],
+ ["assistant","call","bash","c7",70,"bash npm test"],
+ ["tool","result","bash","c7",1500,"测试输出"]
+];
+var ROUNDS=[
+ [["user","text",null,null,60,"顺便看下 lint"],["assistant","call","bash","c8",60,"bash eslint ."],["tool","result","bash","c8",2400,"lint 输出"],["assistant","text",null,null,220,"lint 干净"]],
+ [["user","text",null,null,70,"README 也更新"],["assistant","call","read","c9",50,"read README.md"],["tool","result","read","c9",3300,"README.md"],["assistant","text",null,null,260,"已补充说明"]],
+ [["user","text",null,null,50,"再跑全量测试"],["assistant","call","bash","c10",60,"bash npm test"],["tool","result","bash","c10",8800,"全量测试输出"],["assistant","text",null,null,180,"全部通过"]]
+];
+var S;
+function mk(a,i){return {i:i,role:a[0],kind:a[1],tool:a[2],cid:a[3],tok:a[4],label:a[5],ref:"m"+String(i+1).padStart(5,"0")}}
+function resetFold(mode){
+  S={mode:mode||(S&&S.mode)||"fold",msgs:BASE.map(mk),blocks:[],sel:null,log:[],nb:1,round:0,prev:null};
+  S.prev=buildWire();S.cmp=cmpWire(S.prev,S.prev);
+  S.log=[["note","初始：22 条消息，尚未压缩。试试选一段区间，或点\"推荐区间\"。"]];
+  renderFold();
+}
+function covSet(){var c={};S.blocks.forEach(function(b){if(b.active)b.eff.forEach(function(i){c[i]=1})});return c}
+function protSet(){
+  var cov=covSet(),vis=[];
+  S.msgs.forEach(function(m){if(cov[m.i])return;if(m.tool&&NOPRES[m.tool])return;vis.push(m)});
+  var p={};
+  vis.slice(-PRES_N).forEach(function(m){p[m.i]=1});
+  var acc=0;for(var k=vis.length-1;k>=0&&acc<PRES_TOK;k--){p[vis[k].i]=1;acc+=vis[k].tok}
+  for(var j=S.msgs.length-1;j>=0;j--){var m=S.msgs[j];if(cov[m.i]||m.role!=="user")continue;p[m.i]=1;break}
+  return p;
+}
+function sumItem(b){return {key:"s:"+b.id,tok:b.sum,label:"["+b.id+" · T"+b.tier+"] 摘要",cls:"sum"}}
+function msgItem(m){return {key:"m:"+m.i,tok:m.tok,label:m.ref+" "+m.label,cls:""}}
+function buildWire(){
+  var act=S.blocks.filter(function(b){return b.active}),cov=covSet();
+  var an=act.map(function(b){var ids=b.direct.length?b.direct:b.eff;var e=Math.min.apply(null,ids);e=S.mode==="fold"?Math.max(e,1):0;return {b:b,at:e}}).sort(function(x,y){return x.at-y.at});
+  var out=[{key:"sys",tok:SYS,label:"system 提示（固定）",cls:"sys"}],ai=0;
+  for(var i=0;i<S.msgs.length;i++){
+    while(ai<an.length&&an[ai].at===i){out.push(sumItem(an[ai].b));ai++}
+    if(S.mode==="fold"&&i===0){out.push(msgItem(S.msgs[0]));continue}
+    if(cov[i])continue;
+    out.push(msgItem(S.msgs[i]));
+  }
+  while(ai<an.length){out.push(sumItem(an[ai].b));ai++}
+  return out;
+}
+function cmpWire(prev,cur){
+  var n=0;while(n<prev.length&&n<cur.length&&prev[n].key===cur[n].key)n++;
+  var hit=0,tot=0;cur.forEach(function(w,i){tot+=w.tok;if(i<n)hit+=w.tok});
+  return {n:n,hit:hit,tot:tot,plen:prev.length};
+}
+function logp(c,t){S.log.push([c,t])}
+function commit(){
+  var w=buildWire();S.cmp=cmpWire(S.prev,w);S.prev=w;
+}
+function compressFold(){
+  if(!S.sel){logp("bad","先选一个区间（点两条消息）。");return}
+  var a=Math.min(S.sel[0],S.sel[1]),b=Math.max(S.sel[0],S.sel[1]);
+  S.log=[];
+  logp("note","1 边界解析："+S.msgs[a].ref+" .. "+S.msgs[b].ref);
+  var cov=covSet(),set={};
+  for(var i=a;i<=b;i++)set[i]=1;
+  var ext=true;
+  while(ext){ext=false;S.msgs.forEach(function(m){if(m.cid&&set[m.i]){S.msgs.forEach(function(n){if(n.cid===m.cid&&!set[n.i]){set[n.i]=1;ext=true;logp("w","2 配对修正：拉入 "+n.ref+"（"+n.label+"），避免 call/result 被拆开")}})}})}
+  var pinned=false;
+  Object.keys(set).forEach(function(k){if(cov[k]){delete set[k]}});
+  var pr=protSet(),carved=[];
+  Object.keys(set).forEach(function(k){if(pr[k]){carved.push(S.msgs[k].ref);delete set[k]}});
+  if(carved.length)logp("w","3 保护区软排除："+carved.join("、")+" 保持可见（最近 5 条/5000 token/最后一条用户消息；read、bash 不计入）");
+  var wd=[];
+  S.msgs.forEach(function(m){if(m.cid&&set[m.i]){S.msgs.forEach(function(n){if(n.cid===m.cid&&n.i!==m.i&&!set[n.i]&&!cov[n.i]){wd.push(m.ref);delete set[m.i]}})}});
+  if(wd.length)logp("w","4 回合完整性闸门：撤回 "+wd.join("、")+"，其配对的另一半留在保护区，拆开会产生孤儿");
+  var ids=Object.keys(set).map(Number).sort(function(x,y){return x-y});
+  if(set[0]){logp("note","5 首条用户消息 "+S.msgs[0].ref+" 被钉住：覆盖在块里，但原文仍保留在线上")}
+  var chars=ids.reduce(function(s,k){return s+S.msgs[k].tok*4},0);
+  if(!ids.length){logp("bad","6 剔除后没有可压内容，拒绝。区间整体落在保护区或已被覆盖。");return}
+  if(chars<MINCHARS){logp("bad","6 最小范围门：共 "+chars+" 字符 < "+MINCHARS+"，拒绝。把更多消息并进区间。");return}
+  var tot=0,tool=0;ids.forEach(function(k){tot+=S.msgs[k].tok;if(S.msgs[k].kind==="result")tool+=S.msgs[k].tok});
+  var ratio=tool/tot>=0.5?24:8;
+  var sum=Math.max(60,Math.round(tot/ratio));
+  var id="b"+S.nb++;
+  S.blocks.push({id:id,tier:1,direct:ids.slice(),eff:ids.slice(),sum:sum,active:true});
+  logp("note","7 摘要：覆盖 "+fmt(tot)+" token，工具输出占 "+Math.round(tool/tot*100)+"%，按 1/"+ratio+" 估计摘要约 "+sum+" token（模拟值）");
+  logp("note","8 创建 "+id+"（T1），重置 nudge 基线");
+  S.sel=null;commit();
+}
+function distill(){
+  var act=S.blocks.filter(function(b){return b.active&&b.tier===1});
+  if(act.length<2){S.log=[];logp("bad","至少需要 2 个活跃 T1 块才能蒸馏。");return}
+  S.log=[];
+  var eff={},sum=0;act.forEach(function(b){b.eff.forEach(function(i){eff[i]=1});sum+=b.sum;b.active=false});
+  var id="b"+S.nb++;
+  var s2=Math.max(40,Math.round(sum/4));
+  S.blocks.push({id:id,tier:2,direct:[],eff:Object.keys(eff).map(Number),sum:s2,active:true,consumed:act.map(function(b){return b.id})});
+  logp("note","块范围 "+act[0].id+".."+act[act.length-1].id+" → 目标层 T1，输出层 T2");
+  logp("note","吞并 "+act.map(function(b){return b.id}).join("、")+"，摘要 "+sum+" → 约 "+s2+" token（模拟值，约 1/4）");
+  logp("w","注意：直接范围为空，锚点回退到有效范围的最早位置。摘要从该点起整体被重写，其后的缓存全部失效，所以 T2 要在\"值得\"时才触发。");
+  commit();
+}
+function rewrite(){
+  S.log=[];
+  var cov=covSet(),pr=protSet(),ids=[],tot=0;
+  S.msgs.forEach(function(m){if(!pr[m.i]&&!cov[m.i]){ids.push(m.i);tot+=m.tok}});
+  var prev=S.blocks.filter(function(b){return b.active})[0],ps=prev?prev.sum:0;
+  if(!ids.length&&!prev){logp("bad","没有可压内容。");return}
+  var eff={};ids.forEach(function(i){eff[i]=1});S.blocks.forEach(function(b){if(b.active)b.eff.forEach(function(i){eff[i]=1}),b.active=false});
+  var sum=Math.round(0.35*(tot+ps)),id="b"+S.nb++;
+  S.blocks.push({id:id,tier:1,direct:ids.slice(),eff:Object.keys(eff).map(Number),sum:sum,active:true});
+  logp("note","整段重写：把除保护区外的全部历史（含上一份摘要）重新总结成一份，约 "+sum+" token（模拟值，按 35% 估计）");
+  logp("w","摘要放在最前面，首条用户消息也被吞进去。从这里开始前缀全部变化。");
+  commit();
+}
+function appendRound(){
+  if(S.round>=ROUNDS.length){S.log=[];logp("bad","示例追加轮次已用完，点\"重置\"。");renderFold();return}
+  S.log=[];
+  ROUNDS[S.round++].forEach(function(a){S.msgs.push(mk(a,S.msgs.length))});
+  logp("note","追加一轮新对话。历史只追加，已缓存的前缀应当全部命中。");
+  commit();
+}
+function recommend(){
+  var cov=covSet(),pr=protSet(),start=-1,end=-1;
+  for(var i=1;i<S.msgs.length;i++){if(!cov[i]&&!pr[i]){if(start<0)start=i;end=i}else if(start>=0&&pr[i])break}
+  if(start<0){S.log=[];logp("bad","当前没有推荐区间。");return}
+  S.sel=[start,end];S.log=[];logp("note","推荐区间："+S.msgs[start].ref+" .. "+S.msgs[end].ref+"（保护区之前的第一段连续可压内容）");
+}
+function pick(i){
+  if(S.mode==="rewrite")return;
+  if(!S.sel||S.sel.length===2&&S.selDone){S.sel=[i,i];S.selDone=false;S.selStep=1}
+  else if(S.selStep===1){S.sel=[S.sel[0],i];S.selDone=true;S.selStep=0}
+  else{S.sel=[i,i];S.selDone=false;S.selStep=1}
+}
+function renderFold(){
+  var cov=covSet(),pr=protSet();
+  var mode=$("foldMode");mode.innerHTML="";
+  [["fold","折叠（billion-context）"],["rewrite","整段重写（阈值 compaction）"]].forEach(function(m){
+    var b=document.createElement("button");b.textContent=m[1];b.className=S.mode===m[0]?"on":"";
+    b.addEventListener("click",function(){resetFold(m[0])});mode.appendChild(b)});
+  var bt=$("foldBtns");bt.innerHTML="";
+  var defs=S.mode==="fold"?[["推荐区间",function(){recommend();renderFold()},""],["压缩所选区间 (T1)",function(){compressFold();renderFold()},"pri"],["蒸馏活跃 T1 → T2",function(){distill();renderFold()},""],["追加一轮对话",appendRound,""],["重置",function(){resetFold()},""]]
+    :[["整段重写一次",function(){rewrite();renderFold()},"pri"],["追加一轮对话",appendRound,""],["重置",function(){resetFold()},""]];
+  defs.forEach(function(d){var b=document.createElement("button");b.textContent=d[0];if(d[2])b.className=d[2];b.addEventListener("click",d[1]);bt.appendChild(b)});
+  var ml=$("mlist");ml.innerHTML="";
+  var s0=S.sel?Math.min(S.sel[0],S.sel[1]):-1,s1=S.sel?Math.max(S.sel[0],S.sel[1]):-2;
+  S.msgs.forEach(function(m){
+    var r=document.createElement("button");
+    r.className="row "+(m.role==="user"?"user ":"")+(m.kind==="result"?"result ":"")+(cov[m.i]?"cov ":"")+(m.i>=s0&&m.i<=s1?"sel ":"")+(pr[m.i]?"prot":"");
+    var flag=m.i===0&&S.mode==="fold"?"pin":(pr[m.i]?"保护":(m.tool&&NOPRES[m.tool]&&m.kind!=="text"?"":""));
+    r.innerHTML='<span class="r">'+m.ref+'</span><span class="k">'+({user:"U",assistant:"A",tool:"T"})[m.role]+(m.kind==="call"?"→":m.kind==="result"?"←":"")+'</span><span>'+esc(m.label)+(flag?' <span class="flag">'+flag+'</span>':'')+'</span><span class="t">'+fmt(m.tok)+'</span>';
+    r.addEventListener("click",function(){pick(m.i);renderFold()});
+    ml.appendChild(r);
+  });
+  var w=buildWire(),c=S.cmp,n=c.n,plen=c.plen;
+  var wi=$("wire");wi.innerHTML="";var bar=$("cbar");bar.innerHTML="";
+  var total=w.reduce(function(s,x){return s+x.tok},0);
+  w.forEach(function(x,i){
+    var st=i<n?"hit":(i<plen?"miss":"new");
+    var d=document.createElement("div");d.className="wi "+st+(x.cls==="sum"?" sum":"");d.innerHTML='<span>'+esc(x.label)+'</span><span class="t">'+fmt(x.tok)+'</span>';wi.appendChild(d);
+    var bi=document.createElement("i");bi.className=st;bi.style.width=(x.tok/total*100)+"%";bi.title=x.label;bar.appendChild(bi);
+  });
+  var pct=c.tot?Math.round(c.hit/c.tot*100):100;
+  $("cstat").innerHTML='<span>线上总量 <b>'+fmt(total)+'</b></span><span>命中前缀 <b>'+fmt(c.hit)+' ('+pct+'%)</b></span><span>被改写或新增 <b>'+fmt(total-c.hit)+'</b></span><span><i style="display:inline-block;width:10px;height:10px;background:var(--accent)"></i> 命中 <i style="display:inline-block;width:10px;height:10px;background:var(--warn)"></i> 被改写 <i style="display:inline-block;width:10px;height:10px;background:var(--t1)"></i> 新增</span>';
+  $("flog").innerHTML=S.log.map(function(l){return '<div class="'+l[0]+'">'+esc(l[1])+'</div>'}).join("");
+}
+resetFold("fold");
+
+/* ---------- ch7 tool output sim ---------- */
+var TI={kind:$("iKind"),sz:$("iSz"),use:$("iUse"),crush:$("iCrush"),abs:$("iAbsorb")};
+var KL={json:"JSON 数组",log:"构建/测试日志",code:"源码文件",text:"其他文本"};
+function renderTool(){
+  var kind=TI.kind.value,sz=+TI.sz.value,use=+TI.use.value;
+  $("vKind").textContent=KL[kind];$("vSz").textContent=fmt(sz);$("vUse").textContent=use+"%";
+  var L=[];
+  var big=sz>=4000;
+  L.push([big?"ok":"no","到达时 CCR："+(big?"≥4000 token，原文入库，可见处换成两行占位符（约 40 token）。此后字节永不再变，模型可用 acp_retrieve 取回":"低于 4000 token，保持原样")]);
+  if(TI.crush.checked&&(big||sz>=1000)){
+    var t={json:["json-fold","无损","字段方差折叠，常量字段提到 const，行用 items 表示"],log:["log-select","有损","保留所有 ERROR/FAIL 行、去重警告、截短栈，其余按分数裁到约 100 行"],code:["code-trim","有损","去掉整行注释、docstring、空行串；代码行和字符串字面量逐字保留"],text:[null]}[kind];
+    if(t[0])L.push(["ok","每轮 crush · "+t[0]+"（"+t[1]+"）：纯函数，"+t[2]+"。收益低于 10% 或任何解析异常则原样放行"]);else L.push(["no","crush：无匹配策略，原样放行"]);
+  }else L.push(["no","crush 未启用或体积过小"]);
+  if(TI.abs.checked){L.push([sz>=4000?"ok":"no","absorb："+(sz>=4000?"crush 之后仍超阈值，强制模型蒸馏（有损）":"未超阈值")])}
+  else L.push(["no","absorb 未启用"]);
+  L.push(["ok","之后：作为普通历史，等待 nudge 触发后可被模型折叠进 T1 块"]);
+  L.push([use>=95?"ok":"no","emergency-truncate："+(use>=95?"使用率 ≥95%，若仍在保护区之外，截为首尾各 2000 字符并带 [truncated for context space] 标记":"使用率未到 95%，不动")]);
+  $("toolTrace").innerHTML=L.map(function(t,i){return '<li><span class="pill '+t[0]+'">'+(t[0]==="ok"?"发生":"不发生")+'</span><span>'+t[1]+'</span></li>'}).join("");
+}
+Object.keys(TI).forEach(function(k){TI[k].addEventListener("input",renderTool);TI[k].addEventListener("change",renderTool)});
+renderTool();
+
+/* ---------- ch9 tradeoffs ---------- */
+var TRADE=[
+ ["缓存","折叠（只压增量）","整段重写历史","单次保留率更低（约 1/8）","p"],
+ ["质量","模型写摘要","引擎自动摘要","依赖模型守约，会伪造压缩标记","p"],
+ ["质量","固定 50K 增长步长","按窗口百分比缩放","大窗口用户可能觉得勤，需要逃生口","c"],
+ ["质量","nudge 不披露占用率","告知占用率","需要靠增长信号而非直觉","p"],
+ ["正确性","摘要用 user 角色","system / 伪造 tool call","语义错位，靠前缀标记弥补","c"],
+ ["正确性","内容哈希 id + 保守对账","要求稳定 id / 模糊相似","覆盖率有上限，部分场景诚实不认领","c"],
+ ["正确性","ref 永不复用","回收编号","编号空间只增","c"],
+ ["缓存","首条用户消息钉住","全部可压","体积估算要计入它","c"],
+ ["缓存","CCR 到达时 replace-once","按需判断何时替换","多一次 retrieve 往返","c"],
+ ["缓存","crush 与 query 无关","query 感知选择","压得没那么狠","c"],
+ ["正确性","thinking 与工具参数字节原样","过滤回显的内部标签","回显噪音只能在注入侧解决","c"],
+ ["可用性","preflight 极端溢出用确定性摘要","继续调模型","摘要质量近似为结构化目录","c"],
+ ["可用性","保护区软排除","硬拒绝","模型可能以为压了比实际多","c"],
+ ["可用性","crush fail-open","fail-closed","异常被吞，只靠日志发现","c"],
+ ["复杂度","内核无状态无 I/O","内核自带持久化与摘要器","宿主承担持久化与带外摘要","c"],
+ ["复杂度","doctrine 放提示词","蒸馏进权重","每次 ~2K 固定 token 开销","p"],
+ ["复杂度","做成代理","SDK/插件","逐协议适配、身份对账、单点","c"]
+];
+var tf=$("tfilter");
+var cats=["全部"].concat(Array.from(new Set(TRADE.map(function(t){return t[0]}))));
+var curCat="全部";
+cats.forEach(function(c){var b=document.createElement("button");b.textContent=c;b.addEventListener("click",function(){curCat=c;renderTrade()});tf.appendChild(b)});
+function renderTrade(){
+  [].forEach.call(tf.children,function(b){b.classList.toggle("on",b.textContent===curCat)});
+  var tb=document.querySelector("#ttable tbody");
+  tb.innerHTML=TRADE.filter(function(t){return curCat==="全部"||t[0]===curCat}).map(function(t){return "<tr><td>"+t[0]+"</td><td>"+t[1]+"</td><td>"+t[2]+"</td><td>"+t[3]+"</td><td>"+BADGE[t[4]]+"</td></tr>"}).join("");
+}
+renderTrade();
+
+/* ---------- ch10 roadmap ---------- */
+var ROAD=[
+ ["A · Agent 主循环与停止条件","循环何时停、如何限轮、怎么处理退化响应与断流重试。","src/loop/core.ts（MAX_LOOP_ROUNDS、续写重试）、src/degenerate-turn.ts","停止条件应该由模型、引擎还是预算来定？重试的幂等性如何保证？"],
+ ["B · 工具设计与权限","工具 schema、配对约束、受保护工具、跨协议的 schema 兼容。","kernel/src/compress-tools.ts、protected.ts、tests/wire-contract*","工具描述的措辞怎样影响调用率？schema 约束为什么要进\"账本\"？"],
+ ["C · 记忆与恢复","decompress、search_context、会话规则（acp_rule）、交接文档。","kernel/src/decompress.ts、search/、rules.ts、handoff.ts","什么该留在上下文、什么该放文件、什么该进长期规则？"],
+ ["D · 子 Agent 与委派","子会话的 id 与折叠隔离、acp_delegate 工具。","pi-subagents/、src/subagent-sessions.ts","子 Agent 的上下文如何与主会话隔离、结果如何回灌？"],
+ ["E · 评估方法","探针设计、交互成本指标、对照臂、语料分析。","paper/ §8、kernel/bench/、tests/e2e/","怎样设计能区分\"压缩质量\"与\"模型能力\"的实验？"],
+ ["F · 成本与缓存经济学","cache 读占比、TTL 过期、miss 归因、请求体预算。","src/cache-ledger.ts、reference/request-body-budget.md","节省怎样诚实地度量？哪些 miss 是布局问题，哪些是 provider 行为？"],
+ ["G · 安全与多租户","共享状态目录的边界、凭证脱敏、MITM 与 CA。","TECHNICAL-NOTES.md「共享状态与多实例安全边界」、src/ca.ts、src/log-mask.ts","单用户假设在哪里会破？数据面该怎样分区？"]
+];
+$("road").innerHTML=ROAD.map(function(r){return '<div class="panel"><h4>'+r[0]+' <span class="badge infer">待展开</span></h4><p>'+r[1]+'</p><p class="mono" style="color:var(--muted)">'+r[2]+'</p><p><b>要回答的问题：</b>'+r[3]+'</p></div>'}).join("");
+})();
+</script>

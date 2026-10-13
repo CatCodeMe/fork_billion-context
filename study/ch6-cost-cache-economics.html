@@ -1,0 +1,186 @@
+<title>成本与缓存经济演进讲法</title>
+<main>
+<h1>成本与缓存经济：一条演进主线</h1>
+<p class="sub">同前几章的讲法：从“按 token 付费的朴素估算”出发，遇到现实问题加补丁，补丁带来新代价，代价引出下一步。价格比例只给量级，不当作事实报价。<span class="tag">[代码]</span> 读过源码 <span class="tag">[推断]</span> 我的判断 <span class="tag">[文档]</span> 公开行为 <span class="tag">[论文]</span> 作者自报</p>
+
+<div class="elev"><b>60 秒电梯版（开场就说这段）</b><br>
+“agent 的成本不是‘调用次数×单价’，而是<b>每轮重发整个前缀</b>。所以关键变量是<b>缓存命中率</b>：命中部分只付很小的比例，没命中的按全价甚至带写入溢价。由此推出三件事：第一，设计上<b>前缀必须稳定</b>——只追加、系统提示字节不变、缓存断点别乱动；第二，缓存有<b>TTL</b>，空闲太久会过期，要么接受、要么花钱保温；第三，压缩不是白送的——折叠会让折点之后的前缀<b>重新付费</b>，只有省下的 token 在若干轮内赚回来才值得，所以要有<b>收益门</b>。最后，账要<b>以 provider 回报的 usage 为准</b>，把每次未命中拆成‘新增内容 / 折叠重付 / 过期’三桶，估算只用于事前决策。”</div>
+
+<h2>三条贯穿全程的不变量</h2>
+<div class="inv">
+<div><p><b>① 前缀稳定</b><br>只追加、少改写、缓存断点不回头，命中率才是资产。</p></div>
+<div><p><b>② 以账为准</b><br>provider 回报的 usage 是总账；估算只做事前预判，事后用实测对账。</p></div>
+<div><p><b>③ 收益大于代价才动手</b><br>折叠、保温、侧信道询问，都要先算“省多少 vs 重付多少”。</p></div>
+</div>
+
+<h2>演进图（随步骤逐步长出来）</h2>
+<div class="nav" id="nav"></div>
+<figure><div class="scrollx">
+<svg viewBox="0 0 760 340" width="760" role="img" aria-label="成本与缓存经济数据流随步骤逐步增加缓存、稳定性规则、保温、折叠、闸门、账本与图像估算">
+<defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs>
+<g marker-end="url(#ar)">
+<path class="ln" data-s="0" d="M106 168 H620"/>
+<path class="ln" data-s="1" d="M668 196 V250"/>
+<path class="ln dash" data-s="3" d="M546 250 V196"/>
+<path class="ln" data-s="6" d="M362 250 V196"/>
+<path class="ln" data-s="7" d="M180 250 V196"/>
+</g>
+<text class="lbl" data-s="0" x="112" y="160">每轮重发完整前缀</text>
+<text class="lbl" data-s="1" x="676" y="226">读 ≈0.1x</text>
+<text class="lbl" data-s="3" x="552" y="226">保温</text>
+<text class="lbl" data-s="6" x="368" y="226">usage 对账</text>
+<text class="lbl" data-s="7" x="186" y="226">事前估算</text>
+<g class="bx" data-s="0"><rect x="10" y="140" width="96" height="56" rx="8"/><text class="t" x="20" y="162">Agent</text><text x="20" y="182">每轮请求</text></g>
+<g class="bx" data-s="5"><rect x="132" y="140" width="96" height="56" rx="8"/><text class="t" x="142" y="162">收益闸门</text><text x="142" y="182">增长·最小收益</text></g>
+<g class="bx" data-s="4"><rect x="254" y="140" width="96" height="56" rx="8"/><text class="t" x="264" y="162">折叠</text><text x="264" y="182">省 vs 重付</text></g>
+<g class="bx" data-s="2"><rect x="376" y="140" width="96" height="56" rx="8"/><text class="t" x="386" y="162">稳定规则</text><text x="386" y="182">追加·断点</text></g>
+<g class="bx" data-s="0"><rect x="498" y="140" width="96" height="56" rx="8"/><text class="t" x="508" y="162">Wire</text><text x="508" y="182">发往上游</text></g>
+<g class="bx" data-s="0"><rect x="620" y="140" width="96" height="56" rx="8"/><text class="t" x="630" y="162">Provider</text><text x="630" y="182">按量计费</text></g>
+<g class="bx" data-s="1"><rect x="620" y="250" width="96" height="52" rx="8"/><text class="t" x="630" y="272">前缀缓存</text><text x="630" y="290">读便宜</text></g>
+<g class="bx" data-s="3"><rect x="498" y="250" width="96" height="52" rx="8" stroke-dasharray="5 4"/><text class="t" x="508" y="272">TTL·保温</text><text x="508" y="290">过期/续命</text></g>
+<g class="bx" data-s="6"><rect x="254" y="250" width="216" height="52" rx="8"/><text class="t" x="264" y="272">缓存账本</text><text x="264" y="290">新增·折叠重付·过期</text></g>
+<g class="bx" data-s="7"><rect x="132" y="250" width="96" height="52" rx="8"/><text class="t" x="142" y="272">估算</text><text x="142" y="290">文本·图像</text></g>
+</svg></div>
+<figcaption id="cap"></figcaption></figure>
+
+<div class="nav" style="position:static;border:0;padding:0"><button id="prev">← 上一步</button><button id="next">下一步 →</button><span class="sp"></span><button id="allb" aria-pressed="false">全文连读</button></div>
+<div id="steps">
+
+<section class="step" data-s="0"><h2>C0 · 朴素成本模型：调用次数×单价</h2>
+<div class="say"><span class="k">怎么说：</span>最朴素的想法是“一轮一次调用，按 token 付费”。但 agent 每轮都要把<b>完整历史</b>重新发一遍，所以第 n 轮的输入约等于前 n−1 轮之和，总输入随轮数<b>二次增长</b>；输出 token 单价更高，但量小得多。真正要管的是“<b>每轮重发的前缀要付多少钱</b>”，而不是调用次数。</div>
+<div class="row"><h3>这个朴素版的洞</h3><ul><li>前缀每轮重付一遍 → 缓存是第一杠杆（C1）</li><li>缓存靠“字节前缀相同”，任何改写都会破坏它 → 设计规则（C2）</li><li>缓存会过期 → TTL（C3）</li><li>压缩能省钱，但折叠本身要重付 → 盈亏平衡（C4/C5）</li><li>要能证明省了多少 → 账本（C6）</li><li>估算不准会误判窗口与成本 → 图像（C7）</li></ul></div>
+<div class="row"><h3>小算例（假设先写清楚）</h3><p>假设：静态上下文 100K token，连续 50 轮，不计新增内容与输出；缓存读价 ≈ 0.1× 输入价（公开文档里的量级 <span class="tag">[文档]</span>），命中率 95%。无缓存：50×100K = 5M 单位。有缓存：50×100K×(0.95×0.1 + 0.05×1) = 0.725M 单位，约便宜 85%。这个数字只说明<b>命中率决定量级</b>，不是某家的实际价目。<span class="tag">[推断]</span></p></div>
+<div class="bridge"><span class="k">过渡句：</span>“既然前缀每轮重付，那 provider 的前缀缓存就是最大的成本杠杆，先看它怎么定价。”</div>
+</section>
+
+<section class="step" data-s="1"><h2>C1 · 前缀缓存与价格比：命中才便宜</h2>
+<div class="row"><h3>痛点</h3><p>没有缓存时，长会话的每一轮都按全价重付整个前缀。</p><h3>补丁：利用 provider 的前缀缓存</h3><ul><li>缓存是<b>前缀匹配</b>：从第一个字节开始，相同的部分才能复用，一处不同则其后全部失效。</li><li>价格结构（量级）：读 ≈ 0.1× 输入；写可能有溢价（Anthropic 风格约 1.25×，其他 provider 常等于输入价）；输出常是输入的几倍。<span class="tag">[文档]</span> 具体数字随模型和时间变化，面试只讲结构。</li><li>本项目的建模：<code>PriceProfile</code> 用输入价归一化，<code>w</code> 写入、<code>r</code> 读取、<code>q</code> 输出；缺省 w=1、r=0.1、q=4，可由模型价目表或配置 <code>compress.priceProfile</code> 覆盖。<span class="tag">[代码]</span></li></ul></div>
+<div class="say"><span class="k">怎么说：</span>我会把成本拆成三个桶：<b>命中读（便宜）、未命中写（全价或溢价）、输出（贵但量小）</b>。agent 场景下，决定账单的是第一和第二个桶的比例，也就是命中率。所以后面所有设计，先问一句：“这样做会不会让前缀变化？”</div>
+<div class="cmp"><div><b>pi</b>usage 里分开记 input / output / cacheRead / cacheWrite 和 cost，按桶累加，便于看命中结构。<span class="tag">[代码]</span></div><div><b>codex</b>走 Responses 协议，用 <code>prompt_cache_key</code> 把请求绑到会话 id；子 agent 的 thread id 与根线程不同，但 key 仍取同一个 session id，使父子请求共享缓存（有对应测试）。<span class="tag">[代码]</span></div><div><b>本项目</b>代理不改价格，只保证自己不破坏前缀；价格比例用于折叠盈亏计算。<span class="tag">[代码]</span></div><div><b>Claude Code</b>公开文档说明使用 prompt caching。<span class="tag">[文档]</span></div></div>
+<details><summary>追问：OpenAI 和 Anthropic 的缓存机制有什么区别？</summary><p>公开文档的大意：Anthropic 需要在内容块上显式放 <code>cache_control</code> 断点，最多 4 个；OpenAI 系是自动的前缀缓存，对客户端透明。<span class="tag">[文档]</span> 所以代理要处理的难点主要在 Anthropic 一侧，见下一步。</p></details>
+<div class="bridge"><span class="k">过渡句：</span>“缓存只认字节前缀，那在设计上有哪些具体的‘别碰’清单？”</div>
+</section>
+
+<section class="step" data-s="2"><h2>C2 · 前缀稳定规则：只追加，别回头</h2>
+<div class="row"><h3>痛点</h3><p>任何一个看似无害的改动（系统提示里加时间戳、重排工具、改写早期消息、挪动缓存断点）都会让其后的整个前缀按全价重付，而且<b>请求成功、没有报错</b>，只有账单变贵。</p><h3>补丁：设计规则清单</h3><ul><li><b>系统消息字节稳定</b>：摘要通过 <code>systemToUser</code> 改为 user 消息、留在锚点，使开头那条 system 不随压缩变化，既满足严格后端“只允许 index 0 一条 system”，又保住缓存锚。<span class="tag">[代码]</span></li><li><b>断点只增不减</b>：Anthropic 显式缓存下，已标记的消息保持标记，新标记累加，上限 3 条消息 + 1 条 system = 4 个断点；中途撤销会改变那个元素的字节，使前缀从那里断开。折叠把被覆盖的消息拿掉时，标记才自然消失。客户端自己放了 <code>cache_control</code> 时，代理不再加。<span class="tag">[代码]</span></li><li><b>动态内容放尾部</b>：nudge 提示放在请求尾部，压缩完成后移除，不污染前缀。<span class="tag">[代码]</span></li><li><b>系统提示被宿主改写要能被发现</b>：账本里给每次请求记系统提示指纹，指纹变化会被标出，因为这会废掉其后所有缓存。<span class="tag">[代码]</span></li><li><b>人格分叉按系统文本哈希</b>：同一会话 id 下辅助人格（如审查）使用不同系统提示时，分叉到各自会话，避免互相覆盖基线与快照。<span class="tag">[代码]</span></li></ul></div>
+<div class="say"><span class="k">怎么说：</span>一句话：<b>缓存友好 = 把变化推到尾部，把稳定放在前面，并且别回头改已经发出去的字节</b>。我们有真实事故（#1631）：某些中转只给 system 打断点，结果整段历史每次都全价重付，缓存命中停在 9–13%，连续 40 多个请求都没人发现，因为它不报错。所以规则不只是约定，还要有<b>可观测的检测</b>（C6）。</div>
+<div class="cmp"><div><b>pi</b>在 provider 层处理 <code>cacheRetention</code>（short / long / none）；会话历史本身只追加。<span class="tag">[代码]</span></div><div><b>codex</b>测试断言：单轮覆盖设置后，前缀与 cache key 保持不变；上下文环境信息只在变化时才追加，不重复注入。<span class="tag">[代码]</span></div><div><b>本项目</b>代理不拥有对话，只能“不添乱”：断点累加、system 稳定、动态内容放尾部。<span class="tag">[代码]</span></div><div><b>LangGraph</b>核心不做 prompt cache 治理，有服务商专用的 prompt caching 中间件；LangSmith 自动记录 token 用量与成本（含 cache read、reasoning token）；model / tool call limit 中间件可限制调用次数；节点级 <code>cache_policy</code> 是结果缓存，不是服务商的 prompt cache。<span class="tag">[文档]</span> 裁剪消息会改前缀是我的推断。<span class="tag">[推断]</span></div></div>
+<details><summary>追问：摘要既然要改上下文，怎么可能不破坏前缀？</summary><p>不可能完全不破坏。设计目标是<b>把破坏位置推到尽量靠后</b>：折叠只发生在已被消费的旧区间，且最近若干条受保护；论文口径认为折叠只让“折点之后”失效。我们在账本里单独记录“折叠重付”，不依赖这个口径，而是量出来（C4、C6）。<span class="tag">[代码]</span><span class="tag">[论文]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“稳定做到了，还有一个不受我们控制的因素：缓存会过期。”</div>
+</section>
+
+<section class="step" data-s="3"><h2>C3 · TTL 与保温：空闲就过期</h2>
+<div class="row"><h3>痛点</h3><p>缓存条目有生存时间。公开文档里 Anthropic 的默认 TTL 是 5 分钟，另有更长的可选档位；每次命中会续期。<span class="tag">[文档]</span> 用户停下来喝杯咖啡，回来第一轮整段前缀重新全价写入。</p><h3>补丁（两种态度）</h3><ul><li><b>接受并解释</b>：本项目没有保温机制（我在 <code>src</code> 里没找到 keep-warm 相关实现 <span class="tag">[代码]</span>）；账本把“稳定前缀内的无法归因未命中”归为 TTL 过期/驱逐/中转轮换，并明确标注这是 provider 侧行为，不是 bili 的 bug。</li><li><b>花钱保温（pi）</b>：在 TTL 的约 90% 处，用一个 token 的输出上限把同一请求重放一遍来续命；只有“预期节省 ≥ 阈值”才做。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>保温本质是一个期望值问题：<b>保温花费 = 读一遍前缀 + 1 个输出 token；不保温的风险 = 概率 × 缓存丢失后多付的钱</b>。pi 的实现很说明问题：用一个固定的“空闲时下一次请求在 TTL 内到来”的概率（代码里取 0.15，注释说是从自身用量测得，逐会话估计没有更好），再和最小节省阈值比较，并有 1 小时（流式）和 30 分钟（空闲）的硬上限。空闲时概率低，所以多数情况下不值得保温。</div>
+<div class="cmp"><div><b>pi</b><code>cache-warmer.ts</code>：延迟取 min(0.9×TTL, TTL−10s)；期望节省 = 概率×missCost − warmCost，达到约 5 美分才发；价格未知则不保温；不可安全重放的请求（如按预算思考）直接放弃。<span class="tag">[代码]</span></div><div><b>codex</b>我没有在参考克隆里核对到保温逻辑。<span class="tag">[推断]</span></div><div><b>本项目</b>不保温；用论文口径解释：生产观察（单用户）里活跃节奏（间隔小于 2 分钟，约占 89% 流量）读命中 94.2%，整体 88–91% 的差距被解释为空闲期过期。<span class="tag">[论文]</span></div></div>
+<details><summary>追问：代理能不能替客户端保温？该不该？</summary><p>技术上可以（代理持有最近一次请求体），但这是花用户的钱去赌用户会回来，而且要处理“重放是否安全”（思考预算、工具副作用）。我倾向<b>默认不做、把决策权留给显式开关</b>，并像 pi 那样要求价格已知、有硬上限。<span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“稳定和过期都讲了，现在回到压缩本身：折叠省 token，但它不是免费的。”</div>
+</section>
+
+<section class="step" data-s="4"><h2>C4 · 折叠的盈亏平衡：省多少 vs 重付多少</h2>
+<div class="row"><h3>痛点</h3><p>折叠把 S 个 token 换成 σ 个 token 的摘要，之后每轮少读 S−σ。但折点之后的前缀字节变了，要<b>重新写一遍</b>；摘要本身还是模型输出（贵）。能不能赚回来，取决于它要多少轮。</p><h3>补丁：用公式回答“值不值”（kernel 的 <code>computeFoldEconomics</code>）</h3><ul><li>T = 折叠造成的重付 token（账本里实测）；价格归一化后：</li><li>一次性成本 = (w − r)·T + q·σ − r·S（重付部分比读价多付的 (w−r)·T，加上摘要输出 q·σ，再扣掉 r·S；扣项是 kernel 的记账约定）；</li><li>每轮节省 = (S − σ)·r；</li><li>盈亏平衡轮数 n* = max(0, 一次性成本) / 每轮节省；S ≤ σ 时不可观测。<span class="tag">[代码]</span></li></ul></div>
+<div class="say"><span class="k">怎么说：</span>这个公式的直觉是：<b>折得越靠近尾部，T 越小，回本越快；折得越靠前，要重付的越多</b>。因为 T 大致是“折点之后的整个新视图”。所以工程上有两个杠杆：让折叠发生在靠后位置（受保护的近期区之外、尽量只折最新增量），以及设最小收益门（C5）。注意这只是<b>成本口径</b>；折叠还有“不撞窗口”“注意力更集中”的收益，不能只用账单回答。</div>
+
+<div class="row"><h3>小算例与计算器（假设：w、r 可调，q=4 取 kernel 缺省；T 近似为 V′−X）</h3>
+<p>V=折叠前视图，X=折点在视图中的偏移（折点之前前缀仍可命中），S=被折掉量，σ=摘要量，V′=V−S+σ，T≈V′−X（这是账本 <code>decomposeSample</code> 里“结构性上限”的思路，实际 T 以实测为准 <span class="tag">[推断]</span>）。单位：K token。</p>
+<p>V <input type="range" id="cx-v" min="40" max="400" step="10" value="150"> <b id="cx-vv"></b>K</p>
+<p>X <input type="range" id="cx-x" min="0" max="400" step="5" value="20"> <b id="cx-xv"></b>K</p>
+<p>S <input type="range" id="cx-s" min="5" max="150" step="5" value="40"> <b id="cx-sv"></b>K</p>
+<p>σ <input type="range" id="cx-g" min="0.2" max="10" step="0.2" value="1"> <b id="cx-gv"></b>K</p>
+<p>r <input type="range" id="cx-r" min="0.05" max="0.5" step="0.05" value="0.1"> <b id="cx-rv"></b></p>
+<p>w <input type="range" id="cx-w" min="1" max="1.5" step="0.05" value="1"> <b id="cx-wv"></b></p>
+<p id="cx-out"></p>
+<p class="sub">默认值下（折点靠前）回本要二十一轮左右；把 X 拖到接近 V′，T 趋近 0，回本不到两轮。一次性成本为负时表示第一轮就已净赚，按 0 轮显示。这解释了为什么“只折最新增量”比“重写整段前缀”划算得多。</p></div>
+
+<div class="cmp"><div><b>pi</b>压缩后整个历史被一次性重写成摘要+近期，前缀基本整体重付；它的缓存统计只统计“漏了多少”，不算折叠回本。<span class="tag">[推断]</span></div><div><b>codex</b>本地/远端压缩同属整体重写类，回本分析需要自己算。<span class="tag">[推断]</span></div><div><b>本项目</b>每次折叠都有 S、σ、T、n*、已回本与否的账；有“折得过密”的诊断信号（cadenceOk）。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：论文说折叠不会使前缀失效，和账本里的“折叠重付”矛盾吗？</summary><p>口径不同。论文的论点是历史只追加、折叠只停用靠后区间，因此多数前缀仍在；账本则对每次折叠<b>实测</b>重付量。面试时我会说：论文给的是机制上的预期，账本是验证手段；我没有逐行核对两者的数值是否一致，所以不引用具体重付比例。<span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“既然折叠有成本，就要设闸门：什么情况下根本不该折。”</div>
+</section>
+
+<section class="step" data-s="5"><h2>C5 · 收益闸门：增长驱动 + 最小收益</h2>
+<div class="row"><h3>痛点</h3><p>小增量就折，摘要的写入成本和重付抵消不了节省；占用率触发又太晚；让模型“盲目”照提示压缩，容易在不合适的时机压。</p><h3>补丁</h3><ul><li><b>固定增长步长 50K + 增长门 22.5K</b>：设计细节与逃生口 <code>compress.nudgeGrowthTokens</code> 见第 3 章 K5，此处只讲它的成本含义。<span class="tag">[代码]</span></li><li><b>最小收益门</b>：压力带里可回收量低于 max(5000, 窗口×1%) 就抑制提示，避免“改写几乎回收不了东西、却重置基线、下一轮又触发”的零收益循环（#198）。<span class="tag">[代码]</span></li><li><b>分层升档要更大增长</b>：升到 T2/T3 需要步长的 1.5 倍（<code>tier2GrowthMultiplier</code>），因为老层重写要重付的前缀更靠前、更贵。<span class="tag">[代码]</span></li><li><b>侧信道询问</b>（#2228）：闸门放行后，可先让模型在<b>已缓存的同一前缀</b>上回答一个只有 200 token 输出上限的“现在压是否划算”，而不是盲目注入指令；失败有梯级，不会因垃圾回答强压。<span class="tag">[代码]</span></li></ul></div>
+<div class="say"><span class="k">怎么说：</span>闸门的思想是把 C4 的公式<b>前置成廉价的判据</b>：公式要事后才有实测，所以事前用“增长量 + 最小可回收量”做近似。侧信道询问也有成本：它读一遍缓存前缀，约等于 V×r 加少量输出，所以只在闸门已经放行时才花这笔钱，并且设计成缓存对齐（同 system、同 tools、同消息、无 nudge 尾巴）才便宜。</div>
+<div class="cmp"><div><b>pi</b>阈值型：上下文超过窗口减保留量（16384）时压缩，不看收益。<span class="tag">[代码]</span></div><div><b>codex</b>回合前预检 + 回合中滚动，同属阈值型。<span class="tag">[代码]</span></div><div><b>本项目</b>增长驱动 + 最小收益 + 升档倍数 + 可选的模型侧信道决策。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：为什么 1M 窗口也每涨 50K 就折？不是更费钱吗？</summary><p>这是团队明确的取舍（精简上下文优先），不是遗漏：每次折的范围小，折点靠近尾部，重付小；代价是折叠更频繁。想要更懒的用户可以自己调步长。是否“更省钱”需要用 C6 的账本验证，我不下结论。<span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“有了判据，还得有账：怎么证明省了、省在哪、哪些钱是白花的？”</div>
+</section>
+
+<section class="step" data-s="6"><h2>C6 · 计费对账：provider 的 usage 是总账</h2>
+<div class="row"><h3>痛点</h3><p>不同 provider 的 usage 语义不同（Anthropic 的 input 不含缓存，OpenAI 的含缓存），估算与实际又有出入。只看“命中率”看不出未命中是谁造成的。</p><h3>补丁</h3><ul><li><b>统一口径</b>：按协议归一化 usage，使 <code>total</code> 始终是真实上下文大小，缓存读单列；非流式路径同样入账（否则会出现 stream:false 会话完全没有账本、压缩永不触发）。<span class="tag">[代码]</span></li><li><b>三桶对账</b>：每次请求的未命中 = 新增内容（合法的新鲜内容）+ 折叠重付（由折点引起）+ TTL/其他（稳定前缀内无法归因的残差）。三项相加与总账精确闭合，不引入估算。<span class="tag">[代码]</span></li><li><b>变更归因</b>：模型、协议、上游、凭据指纹、系统提示指纹、重启的变化会被标记，解释“为什么这一轮突然全价”。<span class="tag">[代码]</span></li><li><b>缓存崩塌告警</b>：会话先证明过健康命中（≥50%），随后连续 5 个大请求命中约 0（≤10%），只告警一次并列出可能原因。<span class="tag">[代码]</span></li></ul></div>
+<div class="say"><span class="k">怎么说：</span>我把它概括成“<b>总账 + 三桶 + 归因</b>”。关键设计是：总账来自 provider，不是我们的估算，所以报告可信；桶是拆分而不是估计，所以闭合；残差诚实地标成“无法归因”，而不是硬编一个解释。这样既能回答“折叠值不值”（C4 的 T 来自 compRepay 桶），也能发现“中转 key 池轮换导致全价”这类非代码问题。</div>
+<div class="cmp"><div><b>pi</b><code>cache-stats</code> 按相邻两轮算漏掉的 token 和多付的钱，5 分钟 TTL 作为空闲解释，1024 token 以下视为断点粒度噪声；<code>usage-totals</code> 按桶累加。<span class="tag">[代码]</span></div><div><b>codex</b>用量事件含 cached input tokens 并上报遥测；我没核对到类似“漏桶归因”的分析。<span class="tag">[推断]</span></div><div><b>本项目</b>账本 + 三桶 + 归因 + 崩塌告警，并可通过 <code>/acp-cache</code> 类入口查看。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：这套账有什么盲区？</summary><p>残差桶混合了“TTL 过期”和“客户端改写了线上字节”，kernel 无法区分，只能给出提示；折叠重付的结构性上限里 X 是宿主估算，只作夹紧，不进闭合。所以它擅长发现异常，不擅长精确因果。<span class="tag">[代码]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“账是实测的，但事前决策靠估算——估算里最容易出大错的是图像。”</div>
+</section>
+
+<section class="step" data-s="7"><h2>C7 · 图像与 token 估算：十几倍的误差</h2>
+<div class="row"><h3>痛点</h3><p>图像在 kernel 的文本 token 模型里是“看不见”的（被 codec 搬到旁路），但会原样转发；用 base64 长度除以 4 估算，可能高估十几倍（事故记录：估算 278,161 vs 实际 18,870），导致“看起来超窗”而拒绝转发，形成 502 循环。</p><h3>补丁</h3><ul><li><b>像素模式为默认</b>：解析图像头得到真实尺寸，按平铺模型估算；解析不了用较大的固定值兜底；字节模式需显式开启，只给确实按字节计费的中转。<span class="tag">[代码]</span></li><li><b>单图上限链</b>：<code>imageTokenCap</code>：环境变量 &gt; 路由配置 &gt; 全局配置；未设置即不设上限，非正数会被丢弃。<span class="tag">[代码]</span></li><li><b>用实测纠偏</b>：上游 usage 回报后学习真实单图成本；有一条无网络、约 1 秒、CI 必跑的合成图像计费回归。<span class="tag">[代码]</span></li></ul></div>
+<div class="say"><span class="k">怎么说：</span>教训是<b>别把隐式默认当成事实</b>：把“按字节计费”当缺省，会让所有窗口判断继承 ±1500% 的误差。更好的做法是：默认用量级合理的先验，保留显式覆盖，再用 provider 回报的 usage 学习真值。这也是“以账为准”的又一个应用：估算只能做预判，不能做最终裁决。</div>
+<div class="cmp"><div><b>pi / codex</b>自己持有历史并直接读 provider 回报；图像估算对它们不是代理式的“转发前判断”问题。<span class="tag">[推断]</span></div><div><b>本项目</b><code>src/image-tokens.ts</code>、<code>tests/e2e/e2e-image-billing.test.ts</code>；另有图像压缩配置项（默认关闭）。<span class="tag">[代码]</span></div></div>
+<details><summary>追问：为什么不直接调 provider 的 token 计数接口？</summary><p>这是我的推断：计数接口是额外一次网络往返，不是每家都有，且延迟、限流、成本都进入热路径；代理倾向“先用本地先验，再用 usage 纠偏”。我没有在代码里核对过团队的具体取舍。<span class="tag">[推断]</span></p></details>
+<div class="bridge"><span class="k">过渡句：</span>“最后一问：这些经济学结论的证据强度到底如何？”</div>
+</section>
+
+<section class="step" data-s="8"><h2>C8 · 证据与改进：诚实说明强度</h2>
+<div class="row"><h3>作者自报的数字</h3><ul><li><b>生产观察</b>：调用间隔小于 2 分钟（约占 89% 流量）时缓存读占比 94.2%；主宿主整体 90.7%、另一宿主（ework，含一个无前缀缓存的端点）88.3%，论文把差距解释为空闲间隔变长后的 provider 侧过期；未命中 token 中只有 16% 能由新增后缀解释（论文口径，单用户、08-20 快照）。</li><li><b>受控试点</b>：单一模型、温度 0，计费 token 降低 31–54%。</li></ul><p>两类证据的完整分级与 2.7× 的归因拆分见第 3 章 K9 与第 5 章 E7/E8；以上均为<b>作者自报</b>，不是独立复现。<span class="tag">[论文]</span></p><h3>我会怎么补</h3><ul><li><b>把账本变成决策输入</b>：用实测的 T 和 n* 动态调整闸门，而不是固定 50K。</li><li><b>价格口径</b>：按模型的真实价目计算美元成本，而不只是“输入单位”；价目随时间变化，需要来源与更新机制。</li><li><b>保温</b>：对确实有长间隔使用习惯的用户提供显式开关，要求价格已知并有硬上限。</li><li><b>独立复现</b>：跨用户、跨任务类型的 A/B，报告成本、成功率与重读次数。</li></ul></div>
+<div class="say"><span class="k">怎么说：</span>我会先讲清<b>哪些是机制层面的结论</b>（前缀匹配、折叠回本公式、三桶闭合），它们是推导加测试能支撑的；<b>哪些是效果数字</b>（94.2%、31–54%），只来自作者自己的数据。然后给出补法。把证据强度讲清楚，比把省钱比例讲得漂亮更像专家。</div>
+</section>
+</div>
+
+<h2>一页复习卡</h2>
+<p class="sub">点任意一行跳到对应步骤。</p>
+<div class="scrollt"><table id="tbl">
+<tr><th>步骤</th><th>痛点</th><th>补丁</th><th>新代价 → 引出</th><th>不变量</th></tr>
+<tr class="link" data-j="0"><td>C0 朴素</td><td>每轮重付前缀，二次增长</td><td>—</td><td>→ 找缓存</td><td>—</td></tr>
+<tr class="link" data-j="1"><td>C1 价格比</td><td>全价重付</td><td>前缀缓存；读便宜、写有溢价；PriceProfile 归一化</td><td>只认字节前缀 → 稳定规则</td><td>①</td></tr>
+<tr class="link" data-j="2"><td>C2 稳定</td><td>无声的前缀破坏</td><td>system 稳定、断点累加、动态放尾、指纹检测</td><td>仍会过期 → TTL</td><td>①</td></tr>
+<tr class="link" data-j="3"><td>C3 TTL</td><td>空闲后整段重写</td><td>接受并归因（本项目）/ 期望值保温（pi）</td><td>保温自身花钱 → 算期望</td><td>③</td></tr>
+<tr class="link" data-j="4"><td>C4 平衡</td><td>折叠要重付</td><td>一次性成本 / 每轮节省 = n*</td><td>需要事前判据 → 闸门</td><td>③</td></tr>
+<tr class="link" data-j="5"><td>C5 闸门</td><td>小增量折叠不划算</td><td>50K 增长、最小收益、升档倍数、侧信道询问</td><td>要证明有效 → 账本</td><td>③</td></tr>
+<tr class="link" data-j="6"><td>C6 账本</td><td>看不出谁造成未命中</td><td>usage 总账 + 三桶 + 归因 + 崩塌告警</td><td>事前估算不准 → 图像</td><td>②</td></tr>
+<tr class="link" data-j="7"><td>C7 图像</td><td>base64/4 高估十几倍</td><td>像素模式默认、单图上限链、usage 纠偏</td><td>→ 证据</td><td>②</td></tr>
+<tr class="link" data-j="8"><td>C8 证据</td><td>数字是自报</td><td>账本驱动决策、真实价目、独立复现</td><td>—</td><td>全部</td></tr>
+</table></div>
+</main>
+
+<script>
+(function(){
+var CAP=["C0：Agent 每轮把完整前缀发给 Provider 按量计费。","C1：Provider 的前缀缓存：读便宜，成本取决于命中率。","C2：加入前缀稳定规则：只追加、断点累加、动态放尾。","C3：缓存会过期：TTL 与（可选的）保温。","C4：折叠要权衡：省下的 token 与重付的前缀。","C5：折叠前加收益闸门：增长量与最小收益。","C6：以 provider 的 usage 为总账，三桶对账。","C7：事前估算要校正，尤其是图像。","C8：全貌，附上证据说明。"];
+var cur=0,all=false;
+var steps=[].slice.call(document.querySelectorAll('.step')),N=steps.length-1,nav=document.getElementById('nav'),btns=[];
+function exitAll(){if(all){all=false;document.getElementById('steps').classList.remove('all');document.getElementById('allb').setAttribute('aria-pressed',false)}}
+for(var i=0;i<=N;i++){(function(i){var b=document.createElement('button');b.textContent='C'+i;b.onclick=function(){exitAll();set(i)};nav.appendChild(b);btns.push(b)})(i)}
+var rb=document.createElement('button');rb.textContent='↺ 重置';rb.onclick=function(){exitAll();set(0)};nav.appendChild(rb);
+var svgEls=[].slice.call(document.querySelectorAll('svg [data-s]'));
+function set(n){cur=Math.max(0,Math.min(N,n));
+steps.forEach(function(s){s.classList.toggle('on',+s.dataset.s===cur)});
+btns.forEach(function(b,i){b.setAttribute('aria-pressed',i===cur)});
+svgEls.forEach(function(e){var s=+e.dataset.s,show=all||s<=cur;
+if(e.dataset.h&&(all||cur>=+e.dataset.h))show=false;
+e.classList.toggle('vis',show);
+if(e.classList.contains('bx')||e.classList.contains('ln')){e.classList.toggle('new',!all&&s===cur&&cur>0)}});
+document.getElementById('cap').textContent=all?"全貌：把所有环节放在一起。":CAP[Math.min(cur,CAP.length-1)];
+document.getElementById('prev').disabled=cur===0;document.getElementById('next').disabled=cur===N}
+function top1(){document.getElementById('nav').scrollIntoView({behavior:'smooth',block:'start'})}
+document.getElementById('prev').onclick=function(){exitAll();set(cur-1);top1()};
+document.getElementById('next').onclick=function(){exitAll();set(cur+1);top1()};
+var ab=document.getElementById('allb');
+ab.onclick=function(){all=!all;document.getElementById('steps').classList.toggle('all',all);ab.setAttribute('aria-pressed',all);set(cur)};
+[].forEach.call(document.querySelectorAll('tr.link'),function(r){r.onclick=function(){exitAll();set(+r.dataset.j);top1()}});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'){exitAll();set(cur+1)}if(e.key==='ArrowLeft'){exitAll();set(cur-1)}if(e.key==='Escape'){exitAll();set(0)}});
+function calc(){
+var g=function(id){return document.getElementById(id)};
+if(!g('cx-v')||!g('cx-out'))return;
+var V=+g('cx-v').value,X=+g('cx-x').value,S=+g('cx-s').value,sg=+g('cx-g').value,r=+g('cx-r').value,w=+g('cx-w').value,q=4;
+if(S>V)S=V;if(sg>S)sg=S;
+var Vp=V-S+sg;if(X>Vp)X=Vp;
+var T=Math.max(0,Vp-X);
+var one=(w-r)*T+q*sg-r*S,per=(S-sg)*r;
+g('cx-vv').textContent=V;g('cx-xv').textContent=X;g('cx-sv').textContent=S;g('cx-gv').textContent=sg;g('cx-rv').textContent=r;g('cx-wv').textContent=w;
+var n=per>0?Math.max(0,one)/per:null;
+g('cx-out').innerHTML='V′ = '+Vp.toFixed(1)+'K；重付 T ≈ '+T.toFixed(1)+'K；一次性成本 ≈ '+one.toFixed(1)+'K 单位'+(one<0?'（负值，按 0 计）':'')+'；每轮节省 ≈ '+per.toFixed(2)+'K 单位；<b>回本约 '+(n===null?'不可观测（S ≤ σ）':n.toFixed(1)+' 轮')+'</b>'}
+['cx-v','cx-x','cx-s','cx-g','cx-r','cx-w'].forEach(function(id){var e=document.getElementById(id);if(e)e.oninput=calc});
+calc();
+set(0);
+})();
+</script>
